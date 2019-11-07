@@ -3,9 +3,9 @@ import numpy as np
 
 def train():
     
+    #initialize logger and other
 
-
-    # initialize policy and model
+    # initialize learning/ reply buffer / 
 
     
     # Shooting to collect data

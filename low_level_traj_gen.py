@@ -26,6 +26,7 @@ class low_level_TG(self):
         self.a_dim = a_dim
         self._time = 0
         self.latent_action = np.zeros(z_dim)
+        self.
 
     def update_latent_action(latent_action):
         self.latent_action = latent_action

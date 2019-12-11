@@ -96,10 +96,10 @@ class high_level_planning():
             self.policy_optimizer = torch.optim.Adam(self.policy.parameters(),lr=self.policy_lr)
         
 
-    def update_model(self):
-        state, action, delta_state = replay_model.sample(self.batch_size)
+    def update_model(self, HL_replay_buffer):
+        state, action,_, delta_state,_ = HL_replay_buffer.sample(self.batch_size)
         pred_delta_state = self.forward_model(state,action)
-        model_loss = F.mse_loss(pred_delta_state, next_state)
+        model_loss = F.mse_loss(pred_delta_state, delta_state)
 
         self.model_optimizer.zero_grad()
         model_loss.backward()

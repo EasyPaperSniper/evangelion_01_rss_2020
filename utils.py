@@ -8,13 +8,13 @@ import torch.nn as nn
 import gym
 
 class ReplayBuffer(object):
-    def __init__(self, obs_dim, action_dim, device, capacity):
+    def __init__(self, obs_dim, action_dim,delta_obs_dim, device, capacity):
         self.device = device
         self.capacity = capacity
 
         if type(obs_dim) == int:
             self.obses = np.empty((capacity, obs_dim), dtype=np.float32)
-            self.next_obses = np.empty((capacity, obs_dim), dtype=np.float32)
+            self.next_obses = np.empty((capacity, delta_obs_dim), dtype=np.float32)
         else:
             self.obses = np.empty((capacity, *obs_dim), dtype=np.uint8)
             self.next_obses = np.empty((capacity, *obs_dim), dtype=np.uint8)
@@ -49,19 +49,26 @@ class ReplayBuffer(object):
         return obses, actions, rewards, next_obses, not_dones
 
 
-def high_level_obs(state):
+def HL_obs(state):
     '''
     Extract useful information from state(dict) and form to np.array()
     input:
         state: dict
     output:
         HL_obs: np.array
+                now the obs includes: com velocity in xyz( need ot translate to the com frame)
+                                     joint velocity
     '''
-    # TODO: form the HL_obs
-    HL_obs = state['j_pos']
-    return HL_obs
+    # TODO: form the HL_obs & translate com velocity to com frame
+    high_level_obs = []
+    for vel in state['base_velocity'][0:2]:
+        high_level_obs.append(vel)
 
-def high_level_delta_obs(state): #these two functions can be combined to be one func
+    for j_pos in state['j_pos']:
+        high_level_obs.append(j_pos)
+    return np.array(high_level_obs)
+
+def HL_delta_obs(pre_com_state,post_com_state): #these two functions can be combined to be one func
     '''
     Extract useful information from state(dict) and form to np.array()
     input:
@@ -70,8 +77,12 @@ def high_level_delta_obs(state): #these two functions can be combined to be one 
         HL_obs: np.array
     '''
     # TODO: form the HL_obs
-    HL_delta_obs = state['j_pos']
-    return HL_delta_obs
+    high_level_delta_obs = []
+    for vel in post_com_state['base_velocity'][0:2]:# need to be translated to com frame 
+        high_level_delta_obs.append(vel)
+    # need to add position difference in the com frame
+    high_level_delta_obs.append(post_com_state['base_ori_euler'] - pre_com_state['base_ori_euler'] ) # delta direction
+    return np.array(high_level_delta_obs)
 
 
 def check_robot_dead(state):
@@ -83,4 +94,9 @@ def check_robot_dead(state):
         bool
     '''
     #TODO: define termination condition
-    return 
+    if np.abs(state['base_ori_euler'][0])>0.5 or np.abs(state['base_ori_euler'][1])>0.3:
+        return True
+    return False
+
+def check_data_useful(state):
+    return True

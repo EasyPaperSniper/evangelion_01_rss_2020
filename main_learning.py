@@ -17,9 +17,12 @@ def main(args):
     # define env & high level planning part & low level trajectory generator & replay buffer for HLP
     # initialize logger
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    env = daisy_API(sim=args.sim, render=args.render)
+    env = daisy_API(sim=args.sim, render=True)
     env.set_control_mode(args.control_mode)
     state = env.reset()
+    utils.make_dir(args.save_dir)
+    save_dir = utils.make_dir(args.save_dir + '/trial_%s' % str(args.seed)) if args.save else None
+
     # TODO: use the obs generator to generate example obs and get the data structure
     if args.sim:
         init_state = motion_library.exp_standing(env)
@@ -50,8 +53,8 @@ def main(args):
         update_low_level_policy_lr = args.update_low_level_policy_lr,
         init_state = init_state,
     )
-    # if args.test:
-        # load model/ policies.........
+    if args.test and args.high_level_policy_type !='raibert':
+        high_level_planning.load_data(save_dir) 
 
     for _ in range(args.num_iters):
         # reset robot to stand 
@@ -62,9 +65,12 @@ def main(args):
             # generate foot footstep position. If test, the footstep comes from optimization process
             pre_com_state = state
             if args.test:
-                latent_action = high_level_planning.plan_latent_action()
+                latent_action = high_level_planning.plan_latent_action(state)
             else:
                 latent_action = high_level_planning.sample_latent_action()
+
+            # TODO:
+            
             
             # update LLTG (target footstep position and stance & swing leg)
             low_level_TG.update_latent_action(pre_com_state,latent_action)
@@ -86,6 +92,8 @@ def main(args):
             for _ in range(args.update_per_iter):
                 # model update
                 high_level_planning.update_model(HL_replay_buffer)
+            if args.save:
+                high_level_planning.save_data(save_dir)    
 
     
 if __name__ == "__main__":

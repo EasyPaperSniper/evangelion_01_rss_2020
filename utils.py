@@ -1,11 +1,20 @@
 from collections import deque
 import random
 import os
+import math
 
 import torch
 import numpy as np
 import torch.nn as nn
 import gym
+import daisy_kinematics
+
+def make_dir(dir_path):
+    try:
+        os.mkdir(dir_path)
+    except OSError:
+        pass
+    return dir_path
 
 class ReplayBuffer(object):
     def __init__(self, obs_dim, action_dim,delta_obs_dim, device, capacity):
@@ -48,7 +57,6 @@ class ReplayBuffer(object):
 
         return obses, actions, rewards, next_obses, not_dones
 
-
 def HL_obs(state):
     '''
     Extract useful information from state(dict) and form to np.array()
@@ -61,6 +69,9 @@ def HL_obs(state):
     '''
     # TODO: form the HL_obs & translate com velocity to com frame
     high_level_obs = []
+    high_level_obs.append(math.sin(state['base_ori_euler'][2])) # yaw information 
+    high_level_obs.append(math.cos(state['base_ori_euler'][2]))
+
     for vel in state['base_velocity'][0:2]:
         high_level_obs.append(vel)
 
@@ -68,7 +79,7 @@ def HL_obs(state):
         high_level_obs.append(j_pos)
     return np.array(high_level_obs)
 
-def HL_delta_obs(pre_com_state,post_com_state): #these two functions can be combined to be one func
+def HL_delta_obs(pre_com_state,post_com_state): 
     '''
     Extract useful information from state(dict) and form to np.array()
     input:
@@ -78,10 +89,14 @@ def HL_delta_obs(pre_com_state,post_com_state): #these two functions can be comb
     '''
     # TODO: form the HL_obs
     high_level_delta_obs = []
-    for vel in post_com_state['base_velocity'][0:2]:# need to be translated to com frame 
+    high_level_delta_obs.append(post_com_state['base_ori_euler'][2] ) # predict direction 
+
+    high_level_delta_obs.append(post_com_state['base_pos_x'][0] - pre_com_state['base_pos_x'][0]) # position changes
+    high_level_delta_obs.append(post_com_state['base_pos_y'][0] - pre_com_state['base_pos_y'][0])
+   
+    for vel in post_com_state['base_velocity'][0:2]:# velocity information
         high_level_delta_obs.append(vel)
-    # need to add position difference in the com frame
-    high_level_delta_obs.append(post_com_state['base_ori_euler'][2] - pre_com_state['base_ori_euler'][2] ) # delta direction
+    
     return np.array(high_level_delta_obs)
 
 

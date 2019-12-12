@@ -9,7 +9,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+NUM_LEGS = 6
+TRIPOD_LEG_PAIR_1 = [0, 3, 4]
+TRIPOD_LEG_PAIR_2 = [1, 2, 5]
 class forward_model(nn.Module):
     '''
     The forward model(mid-level policy) is a NN which is trained in a supervised manner
@@ -37,6 +39,40 @@ class forward_model(nn.Module):
 #     def sample_latent_action(self):
 
 #     def update_policy(self):
+
+class raibert_footstep_policy():
+    def __init__(self, 
+                stance_duration = 50,
+                target_speed = np.array([0.0,0.2]),
+                speed_gain = 0.2,
+                des_body_ori = [0,0,0],
+                control_frequency = 60):
+        self.stance_duration = stance_duration
+        self.speed_gain = speed_gain
+        self.target_speed = target_speed
+        self.des_body_ori = des_body_ori
+        self.control_frequency = control_frequency
+        self.swing_set = TRIPOD_LEG_PAIR_1
+        self.stance_set = TRIPOD_LEG_PAIR_2 
+    
+    def plan_latent_action(self,state):
+        latent_action = np.zeros(13)
+        current_speed = state['base_velocity'][0:2]
+        speed_term = self.stance_duration/(2*self.control_frequency) * self.target_speed #current_speed
+        acceleration_term = self.speed_gain *(current_speed - self.target_speed)
+        
+        # X = T/2 * x_dot + k_p (x_dot - x_dot_des)
+        des_footstep = (speed_term + acceleration_term)
+        for i in range(6):
+            if i in self.stance_set:
+                latent_action[i*2:i*2+2] = -des_footstep
+            else:
+                latent_action[i*2:i*2+2] = des_footstep
+        self.swing_set, self.stance_set = np.copy(self.stance_set), np.copy(self.swing_set)
+        return latent_action
+
+    def sample_latent_action(self):
+        return False
 
 
 class random_policy():
@@ -94,6 +130,9 @@ class high_level_planning():
         if high_level_policy_type == 'random':
             self.policy = random_policy(z_dim, self.limits)
             self.update_sample_policy = False
+        if high_level_policy_type == 'raibert':
+            self.policy = raibert_footstep_policy()
+            self.update_sample_policy = False
         else:
             print('Not implement yet!!')
             # self.policy = curiosity_policy()
@@ -130,12 +169,13 @@ class high_level_planning():
         if self.update_sample_policy:
             self.policy.update_policy()
 
-    def plan_latent_action(self):
-        # multi processing
-        return True
+    def plan_latent_action(self,state):
+        return self.policy.plan_latent_action(state)
 
-    def save_model(self):
-        return 
+    def save_data(self,save_dir):
+        torch.save(self.forward_model.state_dict(),
+                   '%s/model.pt' % (save_dir) )
 
-    def load_model(self):
-        return 
+    def load_data(self, save_dir):
+        self.forward_model.load_state_dict(
+            torch.load('%s/model.pt' % (save_dir)))

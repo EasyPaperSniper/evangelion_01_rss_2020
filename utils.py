@@ -81,7 +81,7 @@ def HL_delta_obs(pre_com_state,post_com_state): #these two functions can be comb
     for vel in post_com_state['base_velocity'][0:2]:# need to be translated to com frame 
         high_level_delta_obs.append(vel)
     # need to add position difference in the com frame
-    high_level_delta_obs.append(post_com_state['base_ori_euler'] - pre_com_state['base_ori_euler'] ) # delta direction
+    high_level_delta_obs.append(post_com_state['base_ori_euler'][2] - pre_com_state['base_ori_euler'][2] ) # delta direction
     return np.array(high_level_delta_obs)
 
 

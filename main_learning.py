@@ -1,10 +1,11 @@
-
 # Make sure that roll and pitch are from world frame during control while keep yaw = 0
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 import numpy as np
-import dotmap
+import torch
 
-import daisy_API
+from daisy_API import daisy_API
 import daisy_hardware.motion_library as motion_library
 import high_level_planning_model as HLPM
 import low_level_traj_gen as LLTG
@@ -22,7 +23,7 @@ def main(args):
     # TODO: use the obs generator to generate example obs and get the data structure
     if args.sim:
         init_state = motion_library.exp_standing(env)
-    model_obs_dim, model_output_dim = np.size(utils.HL_obs(state))[0], np.size(utils.HL_delta_obs(state, state))[0]
+    model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
     
     HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device, args.high_level_buffer_size)
 
@@ -59,7 +60,7 @@ def main(args):
 
         for _ in range(args.num_latent_action_per_iteration):
             # generate foot footstep position. If test, the footstep comes from optimization process
-            pre_com_state = np.copy(state)
+            pre_com_state = state
             if args.test:
                 latent_action = high_level_planning.plan_latent_action()
             else:
@@ -72,7 +73,7 @@ def main(args):
                 action = low_level_TG.get_action(state, step)
                 state = env.step(action)
 
-            post_com_state = np.copy(state)
+            post_com_state = state
             # Check if robot still alive
             if utils.check_data_useful(state):
                 high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)

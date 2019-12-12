@@ -124,7 +124,7 @@ class high_level_planning():
 
     def sample_latent_action(self):
         latent_action = self.saturation_func(self.policy.sample_latent_action())
-        return latent_action, 
+        return latent_action
 
     def update_policy(self):
         if self.update_sample_policy:

@@ -82,7 +82,7 @@ class low_level_TG():
         # Initialize trajectory generator
         self.z_dim = z_dim
         self.a_dim = a_dim
-        self.num_timestep_per_footstep = num_timestep_per_footstep,
+        self.num_timestep_per_footstep = num_timestep_per_footstep
 
         if low_level_policy_type == 'IK':
             self.policy = IK_traj_generator(init_state)
@@ -97,8 +97,8 @@ class low_level_TG():
         self.policy.update_latent_action(state, latent_action)
 
     def get_action(self,state, t):
-        phase = t/self.num_timestep_per_footstep
-        action = self.policy.get_action(phase)
+        phase = float(t)/self.num_timestep_per_footstep
+        action = self.policy.get_action(state, phase)
         return action 
 
     def update_TG(self):

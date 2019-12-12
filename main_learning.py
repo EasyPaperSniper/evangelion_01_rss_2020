@@ -41,6 +41,8 @@ def main(args):
         update_sample_policy = args.update_sample_policy,
         update_sample_policy_lr = args.update_sample_policy_lr,
         low_level_policy_type = args.low_level_policy_type,
+        num_timestep_per_footstep = args.num_timestep_per_footstep,
+
     )
     
     low_level_TG = LLTG.low_level_TG(
@@ -69,9 +71,6 @@ def main(args):
             else:
                 latent_action = high_level_planning.sample_latent_action()
 
-            # TODO:
-            
-            
             # update LLTG (target footstep position and stance & swing leg)
             low_level_TG.update_latent_action(pre_com_state,latent_action)
             

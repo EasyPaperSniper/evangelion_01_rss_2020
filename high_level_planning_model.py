@@ -107,6 +107,7 @@ class high_level_planning():
         high_level_policy_type = 'random',
         update_sample_policy = 0,
         update_sample_policy_lr = 1e-3,
+        num_timestep_per_footstep = 50,
         low_level_policy_type = 'IK',
         **kwargs
         ):
@@ -131,7 +132,7 @@ class high_level_planning():
             self.policy = random_policy(z_dim, self.limits)
             self.update_sample_policy = False
         if high_level_policy_type == 'raibert':
-            self.policy = raibert_footstep_policy()
+            self.policy = raibert_footstep_policy(stance_duration = num_timestep_per_footstep)
             self.update_sample_policy = False
         else:
             print('Not implement yet!!')

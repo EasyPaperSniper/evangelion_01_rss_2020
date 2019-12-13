@@ -79,22 +79,27 @@ class random_policy():
     '''
     The policy is defined in the polar coordinate (r, theta)
     '''
-    def __init__(self, z_dim, limits):
+    def __init__(self, z_dim, limits, low_level_policy_type='IK'):
         '''
         z_dim: dimension of the latent action
         scale: the scale of variance in different dim 
         '''
         self.z_dim = z_dim
         self.limits = limits
+        self.low_level_policy_type = low_level_policy_type
 
     def sample_latent_action(self):
-        action = np.random.randn(self.z_dim)
-        for i in range(0, self.z_dim, 2):
-            action[i] = action[i] * self.limits[0]
-            action[i+1] = action[i+1] * self.limits[1]
+        action = np.clip(np.random.randn(self.z_dim), -1,1)
+        if self.low_level_policy_type =='IK':
+            for i in range(0, self.z_dim-1, 2):
+                action[i] = action[i] * self.limits[0]
+                action[i+1] = action[i+1] * self.limits[1]
+            action[-1] = action[i] * 0.05 * math.pi
+
         return action
-
-
+    
+    def plan_latent_action(self):
+        return self.sample_latent_action()
 
 class high_level_planning():
     def __init__(self,
@@ -118,7 +123,7 @@ class high_level_planning():
         self.model_hidden_num = model_hidden_num
 
         if low_level_policy_type == 'IK':
-            self.limits = np.array([0.2,math.pi/4])
+            self.limits = np.array([0.1, 0.1])
         else:
             self.limits = np.ones(z_dim)
 
@@ -129,7 +134,7 @@ class high_level_planning():
         self.model_optimizer = torch.optim.Adam(self.forward_model.parameters(),lr=self.model_lr)
 
         if high_level_policy_type == 'random':
-            self.policy = random_policy(z_dim, self.limits)
+            self.policy = random_policy(z_dim, self.limits, low_level_policy_type)
             self.update_sample_policy = False
         if high_level_policy_type == 'raibert':
             self.policy = raibert_footstep_policy(stance_duration = num_timestep_per_footstep)

@@ -17,7 +17,7 @@ def main(args):
     # define env & high level planning part & low level trajectory generator & replay buffer for HLP
     # initialize logger
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    env = daisy_API(sim=args.sim, render=True)
+    env = daisy_API(sim=args.sim, render=args.render)
     env.set_control_mode(args.control_mode)
     state = env.reset()
     utils.make_dir(args.save_dir)

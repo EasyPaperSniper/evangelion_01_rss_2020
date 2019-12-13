@@ -1,4 +1,3 @@
-# Make sure that roll and pitch at from world frame during control while keep yaw = 0
 import os
 import json
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -14,24 +13,21 @@ from args_all import parse_args
 import utils
 from logger import Logger
 
-
-def main(args):
-    # define env & high level planning part & low level trajectory generator & replay buffer for HLP
-    # initialize logger
+def evaluate_model(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     env = daisy_API(sim=args.sim, render=args.render, logger = False)
     env.set_control_mode(args.control_mode)
     state = env.reset()
     utils.make_dir(args.save_dir)
     save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
-    logger = Logger(save_dir, test= args.test)
+    logger = Logger(save_dir, name = 'eval')
+    logger2 = Logger(save_dir, name = 'tgt')
+    total_step = 0
 
     if args.sim:
         init_state = motion_library.exp_standing(env)
     model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
     
-    HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device, args.high_level_buffer_size)
-
     high_level_planning = HLPM.high_level_planning(
         device = device,
         model_obs_dim = model_obs_dim,
@@ -46,8 +42,8 @@ def main(args):
         low_level_policy_type = args.low_level_policy_type,
         num_timestep_per_footstep = args.num_timestep_per_footstep,
         update_per_iter = args.update_per_iter,
-        
     )
+    high_level_planning.load_data(save_dir)
     
     low_level_TG = LLTG.low_level_TG(
         device = device,
@@ -63,10 +59,10 @@ def main(args):
 
     for iter in range(args.num_iters):
         # reset robot to stand 
-        logger.log('train/Iterations', iter)
-
         if args.sim:
             state = motion_library.exp_standing(env)
+        # generate new target speed
+        tgt_vel = np.clip(np.random.randn(2),-0.03,0.03)
 
         for _ in range(args.num_latent_action_per_iteration):
             # generate foot footstep position. If test, the footstep comes from optimization process
@@ -81,29 +77,34 @@ def main(args):
             
             for step in range(1, args.num_timestep_per_footstep+1):
                 action = low_level_TG.get_action(state, step)
-                state = env.step(action)
+                state, total_step = env.step(action), total_step + 1
+                # logger.log('eval/x_vel',state['base_velocity'][0])
+                # logger.log('eval/y_vel',state['base_velocity'][1])
+                # logger.log('eval/x_pos',state['base_pos_x'][0])
+                # logger.log('eval/y_pos',state['base_pos_y'][0])
+                # logger2.log('tgt/x_vel',tgt_vel[0])
+                # logger2.log('tgt/y_vel',tgt_vel[1])
+                # logger.dump(total_step)
+                # logger2.dump(total_step)
 
             post_com_state = state
             # Check if robot still alive
             if utils.check_data_useful(state):
                 high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
-                HL_replay_buffer.add(high_level_obs, latent_action, 0, high_level_delta_obs, 1)
+                predict_high_level_delta_obs = high_level_planning.forward_model.predict(high_level_obs, latent_action)
+                print(predict_high_level_delta_obs - high_level_delta_obs)
+
+
 
             if utils.check_robot_dead(state):
                 break
-        
-        if HL_replay_buffer.capacity > args.start_training_sample_num:
-            high_level_planning.update_model(HL_replay_buffer,logger)
-            high_level_planning.save_data(save_dir)    
-        
+ 
 
-    
+    return 
+
 if __name__ == "__main__":
     args = parse_args()
-    if not args.test:
-        main(args)
+    if args.test:
+        evaluate_model(args)
     else:
-        print(" This is training file, please run evaluation file")
-
-
-
+        print(" This is evaluation file, please run training file")

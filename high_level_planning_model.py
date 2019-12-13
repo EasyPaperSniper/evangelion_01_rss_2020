@@ -16,11 +16,12 @@ class forward_model(nn.Module):
     '''
     The forward model(mid-level policy) is a NN which is trained in a supervised manner
     '''
-    def __init__(self,model_obs_dim, z_dim, model_output_dim, model_hidden_num):
+    def __init__(self,model_obs_dim, z_dim, model_output_dim, model_hidden_num, device):
         '''
         Initialize the structure and options for model
         '''
         super().__init__()
+        self.device = device
 
         self.trunk = nn.Sequential(
             nn.Linear(model_obs_dim + z_dim, model_hidden_num ), nn.ReLU(),
@@ -31,6 +32,13 @@ class forward_model(nn.Module):
         obs_action = torch.cat([model_obs, latent_action], dim=1)
         return self.trunk(obs_action)
 
+    def predict(self,model_obs, latent_action):
+        model_obs = torch.FloatTensor(model_obs).to(self.device)
+        model_obs = model_obs.unsqueeze(0)
+        latent_action = torch.FloatTensor(latent_action).to(self.device)
+        latent_action = latent_action.unsqueeze(0)
+        prediction = self.forward(model_obs, latent_action)
+        return prediction.cpu().data.numpy().flatten()
     #TODO: add planning part........
 
 # class curiosity_policy():
@@ -74,6 +82,15 @@ class raibert_footstep_policy():
     def sample_latent_action(self):
         return False
 
+# class CEM_planning():
+#     def __init__():
+
+#     def plan_latent_action(self, state):
+        
+
+
+#         return latent_action
+
 
 class random_policy():
     '''
@@ -103,6 +120,7 @@ class random_policy():
 
 class high_level_planning():
     def __init__(self,
+        device,
         model_obs_dim,
         z_dim,
         model_output_dim,
@@ -114,29 +132,33 @@ class high_level_planning():
         update_sample_policy_lr = 1e-3,
         num_timestep_per_footstep = 50,
         low_level_policy_type = 'IK',
+        update_per_iter = 10,
         **kwargs
         ):
         # Initialize model & sampling policy & buffer
+        self.update_step = 0
         self.model_obs_dim = model_obs_dim
         self.z_dim = z_dim
         self.model_output_dim = model_output_dim
         self.model_hidden_num = model_hidden_num
+        self.update_per_iter = update_per_iter
+        self.device = device
 
         if low_level_policy_type == 'IK':
-            self.limits = np.array([0.1, 0.1])
+            self.limits = np.array([0.15, 0.15])
         else:
             self.limits = np.ones(z_dim)
 
         self.batch_size = batch_size
 
-        self.forward_model =  forward_model(model_obs_dim, z_dim, model_output_dim, model_hidden_num)
+        self.forward_model =  forward_model(model_obs_dim, z_dim, model_output_dim, model_hidden_num, device)
         self.model_lr = model_lr
         self.model_optimizer = torch.optim.Adam(self.forward_model.parameters(),lr=self.model_lr)
 
         if high_level_policy_type == 'random':
             self.policy = random_policy(z_dim, self.limits, low_level_policy_type)
             self.update_sample_policy = False
-        if high_level_policy_type == 'raibert':
+        elif high_level_policy_type == 'raibert':
             self.policy = raibert_footstep_policy(stance_duration = num_timestep_per_footstep)
             self.update_sample_policy = False
         else:
@@ -147,28 +169,21 @@ class high_level_planning():
             # self.policy_optimizer = torch.optim.Adam(self.policy.parameters(),lr=self.policy_lr)
         
 
-    def update_model(self, HL_replay_buffer):
-        state, action,_, delta_state,_ = HL_replay_buffer.sample(self.batch_size)
-        pred_delta_state = self.forward_model(state,action)
-        model_loss = F.mse_loss(pred_delta_state, delta_state)
+    def update_model(self, HL_replay_buffer, logger):
+        for _ in range(self.update_per_iter):
+            self.update_step += 1
+            state, action,_, delta_state,_ = HL_replay_buffer.sample(self.batch_size)
+            pred_delta_state = self.forward_model(state,action)
+            model_loss = F.mse_loss(pred_delta_state, delta_state)
 
-        self.model_optimizer.zero_grad()
-        model_loss.backward()
-        self.model_optimizer.step()
+            self.model_optimizer.zero_grad()
+            model_loss.backward()
+            self.model_optimizer.step()
+            logger.log('train/model_loss', model_loss)
+        logger.dump(self.update_step,console = True)
         
-    def saturation_func(self, latent_action):
-        '''
-        Saturate the action
-        Input:
-            action: latent action
-        '''
-        for i in range(0, self.z_dim, int(self.z_dim/6)):
-            for j in range(int(self.z_dim/6)):
-                latent_action[i] = max(min(self.limits[j], latent_action[i]), -self.limits[j])
-        return latent_action
-
     def sample_latent_action(self):
-        latent_action = self.saturation_func(self.policy.sample_latent_action())
+        latent_action = self.policy.sample_latent_action()
         return latent_action
 
     def update_policy(self):

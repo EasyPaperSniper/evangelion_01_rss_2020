@@ -61,6 +61,7 @@ class IK_traj_generator():
 
 class low_level_TG():
     def __init__(self, 
+        device,
         z_dim,
         a_dim,
         num_timestep_per_footstep,
@@ -72,6 +73,7 @@ class low_level_TG():
         **kwargs
     ):
         # Initialize trajectory generator
+        self.device = device
         self.z_dim = z_dim
         self.a_dim = a_dim
         self.num_timestep_per_footstep = num_timestep_per_footstep

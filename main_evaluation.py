@@ -22,7 +22,7 @@ def evaluate_model(args):
     save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
     logger = Logger(save_dir, name = 'eval')
     logger2 = Logger(save_dir, name = 'tgt')
-    total_step = 0
+    total_timestep, total_latent_action = 0, 0 
 
     if args.sim:
         init_state = motion_library.exp_standing(env)
@@ -77,17 +77,19 @@ def evaluate_model(args):
             
             for step in range(1, args.num_timestep_per_footstep+1):
                 action = low_level_TG.get_action(state, step)
-                state, total_step = env.step(action), total_step + 1
-                # logger.log('eval/x_vel',state['base_velocity'][0])
-                # logger.log('eval/y_vel',state['base_velocity'][1])
-                # logger.log('eval/x_pos',state['base_pos_x'][0])
-                # logger.log('eval/y_pos',state['base_pos_y'][0])
-                # logger2.log('tgt/x_vel',tgt_vel[0])
-                # logger2.log('tgt/y_vel',tgt_vel[1])
-                # logger.dump(total_step)
-                # logger2.dump(total_step)
+                state, total_timestep = env.step(action), total_timestep + 1
 
             post_com_state = state
+            total_latent_action += 1
+            logger.log('eval/x_vel',state['base_velocity'][0])
+            logger.log('eval/y_vel',state['base_velocity'][1])
+            logger.log('eval/x_pos',state['base_pos_x'][0])
+            logger.log('eval/y_pos',state['base_pos_y'][0])
+            logger2.log('tgt/x_vel',tgt_vel[0])
+            logger2.log('tgt/y_vel',tgt_vel[1])
+            logger.dump(total_latent_action)
+            logger2.dump(total_latent_action)
+
             # Check if robot still alive
             if utils.check_data_useful(state):
                 high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)

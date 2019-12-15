@@ -3,11 +3,14 @@
 #
 
 import math
+import multiprocessing as mp
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+import utils
 
 NUM_LEGS = 6
 TRIPOD_LEG_PAIR_1 = [0, 3, 4]
@@ -87,8 +90,6 @@ class raibert_footstep_policy():
 
 #     def plan_latent_action(self, state):
         
-
-
 #         return latent_action
 
 
@@ -96,7 +97,7 @@ class random_policy():
     '''
     The policy is defined in the polar coordinate (r, theta)
     '''
-    def __init__(self, z_dim, limits, low_level_policy_type='IK'):
+    def __init__(self, z_dim, limits, low_level_policy_type='IK', sample_num = 50, predict_horizon = 1):
         '''
         z_dim: dimension of the latent action
         scale: the scale of variance in different dim 
@@ -104,6 +105,8 @@ class random_policy():
         self.z_dim = z_dim
         self.limits = limits
         self.low_level_policy_type = low_level_policy_type
+        self.sample_num = sample_num
+        self.predict_horizon = predict_horizon
 
     def sample_latent_action(self):
         action = np.clip(np.random.randn(self.z_dim), -1,1)
@@ -115,8 +118,31 @@ class random_policy():
 
         return action
     
-    def plan_latent_action(self):
-        return self.sample_latent_action()
+    def plan_latent_action(self, state, model, reward_func, p, sample_num = 30, horizon = 1):
+        '''
+        Sample action based on the reward function
+        input:
+            state: dict
+            model: the NN model 
+            reward_func: function
+        output:
+            latent action: np.array(self.z_dim)
+        '''
+        # sample bunch of actions and plan for single step
+        latent_action_buffer = np.empty([sample_num, horizon,self.z_dim])
+        for sample_index in range(sample_num):
+            for horizon_index in range(horizon):
+                latent_action_buffer[sample_index][horizon_index] = self.sample_latent_action()
+
+        # run model to calculate reward
+        cost = [p.apply(utils.run_mpc,args=(state, model, reward_func, latent_action_sample)) 
+                                        for latent_action_sample in latent_action_buffer]
+        
+        # return best reward index and select action
+        sqe_index = cost.index(min(cost))
+        latent_action = latent_action_buffer[sqe_index][0]
+
+        return latent_action
 
 class high_level_planning():
     def __init__(self,
@@ -190,8 +216,9 @@ class high_level_planning():
         if self.update_sample_policy:
             self.policy.update_policy()
 
-    def plan_latent_action(self,state):
-        return self.policy.plan_latent_action(state)
+    def plan_latent_action(self,state,reward_func =None):
+        self.p = mp.Pool(mp.cpu_count())
+        return self.policy.plan_latent_action(state, self.forward_model, reward_func, self.p)
 
     def save_data(self,save_dir):
         torch.save(self.forward_model.state_dict(),

@@ -8,6 +8,7 @@ import numpy as np
 import torch.nn as nn
 import gym
 import daisy_kinematics
+import daisy_raibert_controller
 
 def make_dir(dir_path):
     try:
@@ -75,8 +76,11 @@ def HL_obs(state):
     for vel in state['base_velocity'][0:2]:
         high_level_obs.append(vel)
 
-    for j_pos in state['j_pos']:
-        high_level_obs.append(j_pos)
+    foot_pose_world = daisy_raibert_controller.get_foot_position_world_from_com(state)
+    for foot in foot_pose_world:
+        for foot_pos in foot[0:2]:
+            high_level_obs.append(foot_pos)
+
     return np.array(high_level_obs)
 
 def HL_delta_obs(pre_com_state,post_com_state): 
@@ -97,6 +101,11 @@ def HL_delta_obs(pre_com_state,post_com_state):
     for vel in post_com_state['base_velocity'][0:2]:# velocity information
         high_level_delta_obs.append(vel)
     
+    foot_pose_world = daisy_raibert_controller.get_foot_position_world_from_com(post_com_state)
+    for foot in foot_pose_world:
+        for foot_pos in foot[0:2]:
+            high_level_delta_obs.append(foot_pos)
+
     return np.array(high_level_delta_obs)
 
 
@@ -115,3 +124,7 @@ def check_robot_dead(state):
 
 def check_data_useful(state):
     return True
+
+def run_mpc(state, model, reward_func, latent_action_sample):
+    
+    return False

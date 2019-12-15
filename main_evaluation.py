@@ -97,7 +97,6 @@ def evaluate_model(args):
                 print(predict_high_level_delta_obs - high_level_delta_obs)
 
 
-
             if utils.check_robot_dead(state):
                 break
  

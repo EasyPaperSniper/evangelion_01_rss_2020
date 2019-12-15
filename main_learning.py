@@ -76,12 +76,15 @@ def main(args):
             else:
                 latent_action = high_level_planning.sample_latent_action()
 
-            # update LLTG (target footstep position and stance & swing leg)
-            low_level_TG.update_latent_action(pre_com_state,latent_action)
+            for i in range(2): # half full cycle
+                intermid_state = state
+                latent_action[0:args.z_dim-1] = -1 * (-1)**i * latent_action[0:args.z_dim-1]
+                # update LLTG (target footstep position and stance & swing leg)
+                low_level_TG.update_latent_action(intermid_state,latent_action)
             
-            for step in range(1, args.num_timestep_per_footstep+1):
-                action = low_level_TG.get_action(state, step)
-                state = env.step(action)
+                for step in range(1, args.num_timestep_per_footstep+1):
+                    action = low_level_TG.get_action(state, step)
+                    state = env.step(action)
 
             post_com_state = state
             # Check if robot still alive
@@ -96,7 +99,6 @@ def main(args):
             high_level_planning.update_model(HL_replay_buffer,logger)
             high_level_planning.save_data(save_dir)    
         
-
     
 if __name__ == "__main__":
     args = parse_args()

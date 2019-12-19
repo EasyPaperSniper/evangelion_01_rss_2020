@@ -170,6 +170,18 @@ class high_level_planning():
         self.model_update_steps= model_update_steps
         self.device = device
 
+
+        # normalization parameter for model input/output
+        self.all_mean_var = np.array([
+            np.zeros(model_obs_dim),
+            np.ones(model_obs_dim),
+            np.zeros(z_dim),
+            np.ones(z_dim),
+            np.zeros(model_output_dim),
+            np.ones(model_output_dim),
+        ])
+
+
         if low_level_policy_type == 'IK':
             self.limits = np.array([0.15, 0.15])
         else:
@@ -198,14 +210,35 @@ class high_level_planning():
     def update_model(self, HL_replay_buffer):
         for _ in range(self.model_update_steps):
             self.update_step += 1
-            state, action,_, delta_state,_ = HL_replay_buffer.sample(self.batch_size)
+
+            idxs = np.random.randint(
+                0, HL_replay_buffer.capacity if HL_replay_buffer.full else HL_replay_buffer.idx, size=self.batch_size)
+
+            state = torch.as_tensor(utils.normalization(HL_replay_buffer.obses[idxs], self.all_mean_var[0], self.all_mean_var[1]), device=self.device).float()
+            action = torch.as_tensor(utils.normalization(HL_replay_buffer.actions[idxs], self.all_mean_var[2], self.all_mean_var[3]), device=self.device)
+            delta_state = torch.as_tensor(
+                utils.normalization(HL_replay_buffer.next_obses[idxs], self.all_mean_var[4], self.all_mean_var[5]), device=self.device).float()
+
             pred_delta_state = self.forward_model(state,action)
             model_loss = F.mse_loss(pred_delta_state, delta_state)
             self.model_optimizer.zero_grad()
             model_loss.backward()
             self.model_optimizer.step()
 
-        
+
+    def update_model_norm(self, all_mean_var):
+        '''
+        update normalization parameters(mean, var) for forward model
+        '''
+        self.all_mean_var = all_mean_var
+
+    def model_predict(self, model_obs, latent_action):
+        model_obs_norm = utils.normalization(model_obs, mean= self.all_mean_var[0], std = self.all_mean_var[1])
+        latent_action_norm = utils.normalization(latent_action, mean = self.all_mean_var[2], std = self.all_mean_var[3])
+        predict_norm = self.forward_model.predict(model_obs_norm, latent_action_norm)
+        return utils.inverse_normalization(predict_norm, mean = self.all_mean_var[4], std = self.all_mean_var[5])
+
+
     def sample_latent_action(self):
         latent_action = self.policy.sample_latent_action()
         return latent_action
@@ -226,3 +259,11 @@ class high_level_planning():
     def load_data(self, save_dir):
         self.forward_model.load_state_dict(
             torch.load('%s/model.pt' % (save_dir)))
+
+    def load_mean_var(self,save_dir):
+        '''
+        load normalization parameters(mean, var) for forward model
+        0: mean of obses; 1: var of obses; 2: mean of actions; 3: var of actions; 4: mean of next_obses; 5: var of next_obses
+        '''
+        self.all_mean_var = np.load(save_dir+'/all_mean_var.npy')
+        return self.all_mean_var

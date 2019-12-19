@@ -111,7 +111,6 @@ def main(args):
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )
 
-    
 
 if __name__ == "__main__":
     args = parse_args()

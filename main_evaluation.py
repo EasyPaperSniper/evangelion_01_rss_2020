@@ -27,6 +27,7 @@ def evaluate_model(args):
     if args.sim:
         init_state = motion_library.exp_standing(env)
     model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
+
     
     high_level_planning = HLPM.high_level_planning(
         device = device,
@@ -44,6 +45,7 @@ def evaluate_model(args):
         model_update_steps = args.model_update_steps,
     )
     high_level_planning.load_data(save_dir)
+    high_level_planning.load_mean_var(args.save_dir + '/buffer_data')
     
     low_level_TG = LLTG.low_level_TG(
         device = device,
@@ -95,7 +97,7 @@ def evaluate_model(args):
             # Check if robot still alive
             if utils.check_data_useful(state):
                 high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
-                predict_state = high_level_planning.forward_model.predict(high_level_obs, record_latent_action)
+                predict_state = high_level_planning.model_predict(high_level_obs, record_latent_action)
 
             # collect data
             for term in range(model_output_dim):

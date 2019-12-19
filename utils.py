@@ -91,6 +91,9 @@ class ReplayBuffer(object):
         np.save(save_dir+'/all_mean_var', self.all_mean_var)
 
     def load_mean_var(self,save_dir):
+        '''
+        0: mean of obses; 1: var of obses; 2: mean of actions; 3: var of actions; 4: mean of next_obses; 5: var of next_obses
+        '''
         self.all_mean_var = np.load(save_dir+'/all_mean_var.npy')
         return self.all_mean_var
 

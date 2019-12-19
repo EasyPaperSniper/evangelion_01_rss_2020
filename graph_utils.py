@@ -127,3 +127,68 @@ def print_result(root,
     plt.ylabel(value_name)
 
 
+######################################################################################################
+
+def print_target_eval(root,
+                 title,
+                 seed_index=1,
+                 key_name='step',
+                 value_name='episode_reward',
+                 max_time=None,
+                 best_k=None,
+                 timescale=1,
+                 ignore_seeds=0):
+    file_name_1 = 'eval.log'
+    file_name_2 = 'tgt.log'
+    file_name_template_1 = os.path.join(root, 'trial_%d/' , file_name_1 )
+    keys, means, half_stds = parse_log_files(
+        file_name_template_1,
+        seed_index,
+        key_name,
+        value_name,
+        best_k=best_k,
+        ignore_seeds=ignore_seeds)
+
+    if keys is None:
+        return
+    
+    file_name_template_2 = os.path.join(root, 'trial_%d/' , file_name_2 )
+    tgt_keys, tgt_means, tgt_half_stds = parse_log_files(
+        file_name_template_2,
+        seed_index,
+        key_name,
+        value_name,
+        best_k=best_k,
+        ignore_seeds=ignore_seeds)
+    
+    if keys is None:
+        return
+
+    if max_time is not None:
+        idxs = np.where(keys <= max_time)
+        keys = keys[idxs]
+        means = means[idxs]
+        half_stds = half_stds[idxs]
+
+    keys *= timescale
+
+    plt.locator_params(nbins=6, axis='x')
+    plt.locator_params(nbins=10, axis='y')
+    plt.rcParams['figure.figsize'] = (8, 5)
+    plt.rcParams['figure.dpi'] = 100
+    plt.rcParams['font.size'] = 10
+    plt.subplots_adjust(left=0.165, right=0.99, bottom=0.16, top=0.95)
+
+    plt.grid(alpha=0.8)
+    plt.title(title)
+    plt.plot(keys, means,  label = 'prediction')
+    plt.fill_between(keys, means - half_stds, means + half_stds, alpha=0.2)
+    plt.plot(tgt_keys, tgt_means,  label = 'ground_truth')
+    plt.fill_between(tgt_keys, tgt_means - tgt_half_stds, tgt_means + tgt_half_stds, alpha=0.2)
+    plt.legend(
+        loc='lower right', prop={
+            'size': 6
+        }).get_frame().set_edgecolor('0.1')
+    plt.xlabel(key_name)
+    plt.ylabel(value_name)
+

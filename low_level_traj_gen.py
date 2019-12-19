@@ -34,7 +34,7 @@ class IK_traj_generator():
 
     def get_action(self, state, phase):
         des_foot_pos = []
-        self.des_body_ori[2] = self.latent_action[-1] * phase + self.last_com_ori[2]
+        self.des_body_ori[2] = (self.latent_action[-1] - self.last_com_ori[2]) * phase + self.last_com_ori[2]
         des_foot_height = (self.leg_clearance * math.sin(math.pi * phase + EPSILON) - self.standing_height)
         for i in range(NUM_LEGS):
             des_single_foot_pos = np.zeros(3)

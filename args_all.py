@@ -4,19 +4,19 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--test',default=0,type=int)
     parser.add_argument('--sim',default=1,type=int)
-    parser.add_argument('--render',default=1,type=int)
-    parser.add_argument('--seed',default=2,type=int)
+    parser.add_argument('--render',default=0,type=int)
+    parser.add_argument('--seed',default=1,type=int)
     parser.add_argument('--control_mode',default='position',type=str)
-    parser.add_argument('--num_iters',default= 50,type=int)
-    parser.add_argument('--num_latent_action_per_iteration',default=30,type=int)
+    parser.add_argument('--num_iters',default= 40,type=int)
+    parser.add_argument('--num_latent_action_per_iteration',default=20,type=int)
     parser.add_argument('--num_timestep_per_footstep',default=50,type=int)
     parser.add_argument('--model_hidden_num',default=512,type=int)
     parser.add_argument('--batch_size',default=32,type=int)
     parser.add_argument('--z_dim',default=12,type=int)
     parser.add_argument('--a_dim',default=18,type=int)
-    parser.add_argument('--update_per_iter',default=10,type=int)
+    parser.add_argument('--model_update_steps',default=500,type=int)
     parser.add_argument('--model_lr',default=1e-3,type=float)
-    parser.add_argument('--high_level_policy_type',default='raibert',type=str)
+    parser.add_argument('--high_level_policy_type',default='random',type=str)
     parser.add_argument('--update_sample_policy',default=0,type=int)
     parser.add_argument('--update_sample_policy_lr',default=1e-3,type=float)
     parser.add_argument('--low_level_policy_type',default='IK',type=str)
@@ -30,10 +30,7 @@ def parse_args():
 
 
     args = parser.parse_args()
-    if not args.test:
-        args.render = 0
-    else:
-        args.num_iters = 1
+
 
     if args.low_level_policy_type =='IK':
         args.update_low_level_policy = 0
@@ -47,6 +44,11 @@ def parse_args():
         args.update_sample_policy = 0
         args.z_dim = 13
         args.test = 1
+
+    if not args.test:
+        args.render = 0
+    else:
+        args.num_iters = 1
 
     return args
 

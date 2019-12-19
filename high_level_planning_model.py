@@ -55,7 +55,7 @@ class raibert_footstep_policy():
     def __init__(self, 
                 stance_duration = 50,
                 target_speed = np.array([0.0,0.2]),
-                speed_gain = 0.2,
+                speed_gain = 0.0,
                 des_body_ori = [0,0,0],
                 control_frequency = 60):
         self.stance_duration = stance_duration
@@ -118,7 +118,7 @@ class random_policy():
 
         return action
     
-    def plan_latent_action(self, state, model, reward_func, p, sample_num = 30, horizon = 1):
+    def plan_latent_action(self, state, model, cost_func, p, sample_num = 30, horizon = 1):
         '''
         Sample action based on the reward function
         input:
@@ -158,7 +158,7 @@ class high_level_planning():
         update_sample_policy_lr = 1e-3,
         num_timestep_per_footstep = 50,
         low_level_policy_type = 'IK',
-        update_per_iter = 10,
+        model_update_steps = 10,
         **kwargs
         ):
         # Initialize model & sampling policy & buffer
@@ -167,7 +167,7 @@ class high_level_planning():
         self.z_dim = z_dim
         self.model_output_dim = model_output_dim
         self.model_hidden_num = model_hidden_num
-        self.update_per_iter = update_per_iter
+        self.model_update_steps= model_update_steps
         self.device = device
 
         if low_level_policy_type == 'IK':
@@ -195,18 +195,16 @@ class high_level_planning():
             # self.policy_optimizer = torch.optim.Adam(self.policy.parameters(),lr=self.policy_lr)
         
 
-    def update_model(self, HL_replay_buffer, logger):
-        for _ in range(self.update_per_iter):
+    def update_model(self, HL_replay_buffer):
+        for _ in range(self.model_update_steps):
             self.update_step += 1
             state, action,_, delta_state,_ = HL_replay_buffer.sample(self.batch_size)
             pred_delta_state = self.forward_model(state,action)
             model_loss = F.mse_loss(pred_delta_state, delta_state)
-
             self.model_optimizer.zero_grad()
             model_loss.backward()
             self.model_optimizer.step()
-            logger.log('train/model_loss', model_loss)
-        logger.dump(self.update_step,console = True)
+
         
     def sample_latent_action(self):
         latent_action = self.policy.sample_latent_action()
@@ -216,9 +214,10 @@ class high_level_planning():
         if self.update_sample_policy:
             self.policy.update_policy()
 
-    def plan_latent_action(self,state,reward_func =None):
-        self.p = mp.Pool(mp.cpu_count())
-        return self.policy.plan_latent_action(state, self.forward_model, reward_func, self.p)
+    def plan_latent_action(self,state,cost_func =None):
+        # self.p = mp.Pool(mp.cpu_count())
+        # return self.policy.plan_latent_action(state, self.forward_model, reward_func, self.p)
+        return self.policy.plan_latent_action(state)
 
     def save_data(self,save_dir):
         torch.save(self.forward_model.state_dict(),

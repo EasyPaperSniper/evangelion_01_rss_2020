@@ -109,7 +109,7 @@ class random_policy():
         self.predict_horizon = predict_horizon
 
     def sample_latent_action(self):
-        action = np.clip(np.random.randn(self.z_dim), -0.5,0.5)
+        action = np.clip(np.random.randn(self.z_dim), -1,1)
         if self.low_level_policy_type =='IK':
             for i in range(0, self.z_dim-1, 2):
                 action[i] = action[i] * self.limits[0]
@@ -183,7 +183,7 @@ class high_level_planning():
 
 
         if low_level_policy_type == 'IK':
-            self.limits = np.array([0.15, 0.15])
+            self.limits = np.array([0.3, 0.3])
         else:
             self.limits = np.ones(z_dim)
 
@@ -215,7 +215,7 @@ class high_level_planning():
                 0, HL_replay_buffer.capacity if HL_replay_buffer.full else HL_replay_buffer.idx, size=self.batch_size)
 
             state = torch.as_tensor(utils.normalization(HL_replay_buffer.obses[idxs], self.all_mean_var[0], self.all_mean_var[1]), device=self.device).float()
-            action = torch.as_tensor(utils.normalization(HL_replay_buffer.actions[idxs], self.all_mean_var[2], self.all_mean_var[3]), device=self.device)
+            action = torch.as_tensor(utils.normalization(HL_replay_buffer.actions[idxs], self.all_mean_var[2], self.all_mean_var[3]), device=self.device).float()
             delta_state = torch.as_tensor(
                 utils.normalization(HL_replay_buffer.next_obses[idxs], self.all_mean_var[4], self.all_mean_var[5]), device=self.device).float()
 

@@ -83,17 +83,17 @@ def evaluate_model(args):
             post_com_state = state
             total_latent_action += 1
 
-            # # Check if robot still alive
-            # if utils.check_data_useful(state):
-            #     high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
-            #     predict_state = high_level_planning.model_predict(high_level_obs, record_latent_action)
+            # Check if robot still alive
+            if utils.check_data_useful(state):
+                high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
+                predict_state = high_level_planning.model_predict(high_level_obs, l satent_action)
 
-            # # collect data
-            # for term in range(model_output_dim):
-            #     logger.log('eval/term_' + str(term), predict_state[term])
-            #     logger2.log('tgt/term_'+ str(term), high_level_delta_obs[term])
-            # logger.dump(total_latent_action)
-            # logger2.dump(total_latent_action)
+            # collect data
+            for term in range(model_output_dim):
+                logger.log('eval/term_' + str(term), predict_state[term])
+                logger2.log('tgt/term_'+ str(term), high_level_delta_obs[term])
+            logger.dump(total_latent_action)
+            logger2.dump(total_latent_action)
 
 
             if utils.check_robot_dead(state):

@@ -100,7 +100,7 @@ def main(args):
     )
 
     # collect data
-    data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
+    # data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )

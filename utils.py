@@ -115,7 +115,7 @@ def HL_obs(state):
         state: dict
     output:
         HL_obs: np.array
-                now the obs includes: com velocity in xyz, yaw information, footplace location in the CoM frame
+                now the obs includes: com velocity in xyz, yaw information
     '''
     # TODO: form the HL_obs & translate com velocity to com frame
     high_level_obs = []
@@ -124,11 +124,6 @@ def HL_obs(state):
 
     for vel in state['base_velocity'][0:2]:
         high_level_obs.append(vel)
-
-    foot_pose_world = daisy_raibert_controller.get_foot_position_world_from_com(state)
-    for foot in foot_pose_world:
-        for foot_pos in foot[0:2]:
-            high_level_obs.append(foot_pos)
 
     return np.array(high_level_obs)
 
@@ -150,11 +145,6 @@ def HL_delta_obs(pre_com_state,post_com_state):
     for vel in post_com_state['base_velocity'][0:2]:# velocity information
         high_level_delta_obs.append(vel)
     
-    foot_pose_world = daisy_raibert_controller.get_foot_position_world_from_com(post_com_state)
-    for foot in foot_pose_world:
-        for foot_pos in foot[0:2]:
-            high_level_delta_obs.append(foot_pos)
-
     return np.array(high_level_delta_obs)
 
 
@@ -195,3 +185,10 @@ def run_mpc(state, model, cost_func, latent_action_sample):
         next_state, pre_com_state = calc_next_state(state, post_state)
     cost = cost_func(next_state)
     return cost
+
+def get_init_r_yaw(init_foot_pos):
+    r_yaw = np.zeros((6,2))
+    for i in range(6):
+        r_yaw[i][0] = np.sqrt(init_foot_pos[i][0]**2 + init_foot_pos[i][1]**2)
+        r_yaw[i][1] = math.atan2(init_foot_pos[i][1], init_foot_pos[i][0])
+    return r_yaw

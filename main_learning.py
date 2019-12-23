@@ -27,24 +27,18 @@ def data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
                 latent_action = high_level_planning.plan_latent_action(state)
             else:
                 latent_action = high_level_planning.sample_latent_action()
-            record_latent_action = np.copy(latent_action)
 
-            for i in range(2): # half full cycle
-                intermid_state = state
-
-                latent_action[0:args.z_dim-1] = (-1)**i  * latent_action[0:args.z_dim-1]
-                # update LLTG (target footstep position and stance & swing leg)
-                low_level_TG.update_latent_action(intermid_state,latent_action)
-            
-                for step in range(1, args.num_timestep_per_footstep+1):
-                    action = low_level_TG.get_action(state, step)
-                    state = env.step(action)
+            low_level_TG.update_latent_action(state,latent_action)
+        
+            for step in range(1, args.num_timestep_per_footstep+1):
+                action = low_level_TG.get_action(state, step)
+                state = env.step(action)
 
             post_com_state = state
             # Check if robot still alive
             if utils.check_data_useful(state):
                 high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
-                HL_replay_buffer.add(high_level_obs, record_latent_action, 0, high_level_delta_obs, 1)
+                HL_replay_buffer.add(high_level_obs, latent_action, 0, high_level_delta_obs, 1)
 
             if utils.check_robot_dead(state):
                 break

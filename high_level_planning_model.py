@@ -54,7 +54,7 @@ class forward_model(nn.Module):
 class raibert_footstep_policy():
     def __init__(self, 
                 stance_duration = 50,
-                target_speed = np.array([0.0,0.2]),
+                target_speed = np.array([0.0,0.0,0.1]),
                 speed_gain = 0.0,
                 des_body_ori = [0,0,0],
                 control_frequency = 60):
@@ -67,18 +67,18 @@ class raibert_footstep_policy():
         self.stance_set = TRIPOD_LEG_PAIR_2 
     
     def plan_latent_action(self,state):
-        latent_action = np.zeros(13)
+        latent_action = np.zeros(3)
         current_speed = state['base_velocity'][0:2]
-        speed_term = self.stance_duration/(2*self.control_frequency) * self.target_speed #current_speed
-        acceleration_term = self.speed_gain *(current_speed - self.target_speed)
         
+        speed_term = self.stance_duration/(2*self.control_frequency) * self.target_speed[0:2] #current_speed
+        acceleration_term = self.speed_gain *(current_speed - self.target_speed[0:2])
+        orientation_speed_term = self.stance_duration/(2*self.control_frequency) * self.target_speed[2]
+
         # X = T/2 * x_dot + k_p (x_dot - x_dot_des)
         des_footstep = (speed_term + acceleration_term)
-        for i in range(6):
-            if i in self.stance_set:
-                latent_action[i*2:i*2+2] = -des_footstep
-            else:
-                latent_action[i*2:i*2+2] = des_footstep
+        latent_action[0:2] = des_footstep
+        latent_action[2] = orientation_speed_term
+
         self.swing_set, self.stance_set = np.copy(self.stance_set), np.copy(self.swing_set)
         return latent_action
 
@@ -109,12 +109,12 @@ class random_policy():
         self.predict_horizon = predict_horizon
 
     def sample_latent_action(self):
-        action = np.clip(np.random.randn(self.z_dim), -1,1)
+        action = np.clip(np.random.randn(self.z_dim), -0.5,0.5)
         if self.low_level_policy_type =='IK':
             for i in range(0, self.z_dim-1, 2):
                 action[i] = action[i] * self.limits[0]
                 action[i+1] = action[i+1] * self.limits[1]
-            action[-1] = action[i] * 0.05 * math.pi
+            action[-1] = action[i] * 0.2 * math.pi
 
         return action
     

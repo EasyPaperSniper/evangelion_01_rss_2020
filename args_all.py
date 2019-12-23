@@ -4,7 +4,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--test',default=1,type=int)
     parser.add_argument('--sim',default=1,type=int)
-    parser.add_argument('--render',default=0,type=int)
+    parser.add_argument('--render',default=1,type=int)
     parser.add_argument('--seed',default=1,type=int)
     parser.add_argument('--control_mode',default='position',type=str)
     parser.add_argument('--num_iters',default= 40,type=int)
@@ -12,7 +12,7 @@ def parse_args():
     parser.add_argument('--num_timestep_per_footstep',default=50,type=int)
     parser.add_argument('--model_hidden_num',default=512,type=int)
     parser.add_argument('--batch_size',default=32,type=int)
-    parser.add_argument('--z_dim',default=12,type=int)
+    parser.add_argument('--z_dim',default=3,type=int)
     parser.add_argument('--a_dim',default=18,type=int)
     parser.add_argument('--model_update_steps',default=500,type=int)
     parser.add_argument('--model_lr',default=1e-3,type=float)
@@ -48,7 +48,7 @@ def parse_args():
     if not args.test:
         args.render = 0
     else:
-        args.num_iters = 1
+        args.num_iters = 5
 
     return args
 

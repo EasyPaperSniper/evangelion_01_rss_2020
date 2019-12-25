@@ -66,19 +66,18 @@ class raibert_footstep_policy():
         self.swing_set = TRIPOD_LEG_PAIR_1
         self.stance_set = TRIPOD_LEG_PAIR_2 
     
-    def plan_latent_action(self,state):
+    def plan_latent_action(self,state, target_speed=None):
         latent_action = np.zeros(3)
         current_speed = state['base_velocity'][0:2]
         
         speed_term = self.stance_duration/(2*self.control_frequency) * self.target_speed[0:2] #current_speed
         acceleration_term = self.speed_gain *(current_speed - self.target_speed[0:2])
-        orientation_speed_term = self.stance_duration/(2*self.control_frequency) * self.target_speed[2]
+        orientation_speed_term = self.stance_duration/(self.control_frequency) * self.target_speed[2]
 
         # X = T/2 * x_dot + k_p (x_dot - x_dot_des)
         des_footstep = (speed_term + acceleration_term)
         latent_action[0:2] = des_footstep
         latent_action[2] = orientation_speed_term
-
         self.swing_set, self.stance_set = np.copy(self.stance_set), np.copy(self.swing_set)
         return latent_action
 
@@ -97,7 +96,7 @@ class random_policy():
     '''
     The policy is defined in the polar coordinate (r, theta)
     '''
-    def __init__(self, z_dim, limits, low_level_policy_type='IK', sample_num = 50, predict_horizon = 1):
+    def __init__(self, z_dim, limits, low_level_policy_type='IK', sample_num = 20, predict_horizon = 1):
         '''
         z_dim: dimension of the latent action
         scale: the scale of variance in different dim 
@@ -114,34 +113,23 @@ class random_policy():
             for i in range(0, self.z_dim-1, 2):
                 action[i] = action[i] * self.limits[0]
                 action[i+1] = action[i+1] * self.limits[1]
-            action[-1] = action[i] * 0.2 * math.pi
+            action[-1] = action[-1] * 0.05 * math.pi
 
         return action
     
-    def plan_latent_action(self, state, model, cost_func, p, sample_num = 30, horizon = 1):
+    def plan_latent_action(self, target_speed):
         '''
         Sample action based on the reward function
         input:
-            state: dict
-            model: the NN model 
-            reward_func: function
+            target_speed
         output:
             latent action: np.array(self.z_dim)
         '''
-        # sample bunch of actions and plan for single step
-        latent_action_buffer = np.empty([sample_num, horizon,self.z_dim])
-        for sample_index in range(sample_num):
-            for horizon_index in range(horizon):
-                latent_action_buffer[sample_index][horizon_index] = self.sample_latent_action()
 
-        # run model to calculate reward
-        cost = [p.apply(utils.run_mpc,args=(state, model, reward_func, latent_action_sample)) 
-                                        for latent_action_sample in latent_action_buffer]
-        
-        # return best reward index and select action
-        sqe_index = cost.index(min(cost))
-        latent_action = latent_action_buffer[sqe_index][0]
-
+        T = 50.0/60.0 # now the time for single step is hard coded
+        latent_action = np.random.randn(self.z_dim) * 0.1
+        latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
+        latent_action[2] = target_speed[2] * T + latent_action[2]
         return latent_action
 
 class high_level_planning():
@@ -169,7 +157,8 @@ class high_level_planning():
         self.model_hidden_num = model_hidden_num
         self.model_update_steps= model_update_steps
         self.device = device
-
+        self.high_level_policy_type = high_level_policy_type
+        self.num_timestep_per_footstep = num_timestep_per_footstep
 
         # normalization parameter for model input/output
         self.all_mean_var = np.array([
@@ -183,7 +172,7 @@ class high_level_planning():
 
 
         if low_level_policy_type == 'IK':
-            self.limits = np.array([0.3, 0.3])
+            self.limits = np.array([0.1, 0.1])
         else:
             self.limits = np.ones(z_dim)
 
@@ -194,6 +183,7 @@ class high_level_planning():
         self.model_optimizer = torch.optim.Adam(self.forward_model.parameters(),lr=self.model_lr)
 
         if high_level_policy_type == 'random':
+            self.p = mp.Pool(mp.cpu_count())
             self.policy = random_policy(z_dim, self.limits, low_level_policy_type)
             self.update_sample_policy = False
         elif high_level_policy_type == 'raibert':
@@ -247,11 +237,28 @@ class high_level_planning():
         if self.update_sample_policy:
             self.policy.update_policy()
 
-    def plan_latent_action(self,state,cost_func =None):
-        # self.p = mp.Pool(mp.cpu_count())
-        # return self.policy.plan_latent_action(state, self.forward_model, reward_func, self.p)
-        return self.policy.plan_latent_action(state)
+    def plan_latent_action(self,state, target_speed = None, sample_num = 3, horizon = 3):
+        if self.high_level_policy_type =='raibert':
+            self.policy.target_speed = target_speed
+            return self.policy.plan_latent_action(state,target_speed )
+        
+        if self.high_level_policy_type == 'random':
+            # sample bunch of actions and plan for single step
+            latent_action_buffer = np.empty([sample_num, horizon, self.z_dim])
+            for sample_index in range(sample_num):
+                for horizon_index in range(horizon):
+                    latent_action_buffer[sample_index][horizon_index] = self.policy.plan_latent_action(target_speed)
 
+            # run model to calculate reward
+            cost = [self.p.apply(utils.run_mpc_without_norm,args=(state , self.forward_model, target_speed, latent_action_sample, self.all_mean_var)) 
+                                        for latent_action_sample in latent_action_buffer]
+        
+            # return best reward index and select action
+            sqe_index = cost.index(min(cost))
+            latent_action = latent_action_buffer[sqe_index][0]
+            return latent_action
+    
+    
     def save_data(self,save_dir):
         torch.save(self.forward_model.state_dict(),
                    '%s/model.pt' % (save_dir) )

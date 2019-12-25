@@ -19,14 +19,12 @@ def data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
     for iter in range(args.num_iters):
         if args.sim:
             state = motion_library.exp_standing(env)
-
+            low_level_TG.reset(state)
         for _ in range(args.num_latent_action_per_iteration):
             # generate foot footstep position. If test, the footstep comes from optimization process
             pre_com_state = state
-            if args.test:
-                latent_action = high_level_planning.plan_latent_action(state)
-            else:
-                latent_action = high_level_planning.sample_latent_action()
+
+            latent_action = high_level_planning.sample_latent_action()
 
             low_level_TG.update_latent_action(state,latent_action)
         
@@ -100,7 +98,7 @@ def main(args):
     )
 
     # collect data
-    # data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
+    data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )

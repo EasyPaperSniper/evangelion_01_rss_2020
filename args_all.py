@@ -2,12 +2,12 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test',default=0,type=int)
+    parser.add_argument('--test',default=1,type=int)
     parser.add_argument('--sim',default=1,type=int)
     parser.add_argument('--render',default=0,type=int)
     parser.add_argument('--seed',default=1,type=int)
     parser.add_argument('--control_mode',default='position',type=str)
-    parser.add_argument('--num_iters',default= 40,type=int)
+    parser.add_argument('--num_iters',default= 50,type=int)
     parser.add_argument('--num_latent_action_per_iteration',default=20,type=int)
     parser.add_argument('--num_timestep_per_footstep',default=50,type=int)
     parser.add_argument('--model_hidden_num',default=512,type=int)
@@ -34,7 +34,7 @@ def parse_args():
 
     if args.low_level_policy_type =='IK':
         args.update_low_level_policy = 0
-        args.z_dim = 13
+        args.z_dim = 3
         args.a_dim = 18
 
     if args.high_level_policy_type =='random':
@@ -42,7 +42,7 @@ def parse_args():
     
     if args.high_level_policy_type =='raibert':
         args.update_sample_policy = 0
-        args.z_dim = 13
+        args.z_dim = 3
         args.test = 1
 
     if not args.test:

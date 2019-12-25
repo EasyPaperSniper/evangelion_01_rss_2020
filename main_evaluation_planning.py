@@ -13,7 +13,6 @@ from args_all import parse_args
 import utils
 from logger import Logger
 
-
 def evaluate_model(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     env = daisy_API(sim=args.sim, render=args.render, logger = False)
@@ -64,39 +63,38 @@ def evaluate_model(args):
         # reset robot to stand 
         if args.sim:
             state = motion_library.exp_standing(env)
-            low_level_TG.reset(state)
         # generate new target speed
-        target_speed = np.clip(np.random.randn(3),-0.15,0.15)
+        high_level_planning.policy.target_speed = np.clip(np.random.randn(3),-0.1,0.1)
 
         for _ in range(args.num_latent_action_per_iteration):
             # generate foot footstep position. If test, the footstep comes from optimization process
             pre_com_state = state
-            latent_action = high_level_planning.plan_latent_action(state, target_speed)
+            if args.test:
+                latent_action = high_level_planning.plan_latent_action(state)
+            else:
+                latent_action = high_level_planning.sample_latent_action()
+                    
             low_level_TG.update_latent_action(state,latent_action)
             
             for step in range(1, args.num_timestep_per_footstep+1):
                 action = low_level_TG.get_action(state, step)
-                state, total_timestep = env.step(action), total_timestep + 1
+                state, total_timestep = env.step(action), total_timestep+1
 
             post_com_state = state
             total_latent_action += 1
 
             # Check if robot still alive
             if utils.check_data_useful(state):
-                high_level_obs , high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
+                high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
                 predict_state = high_level_planning.model_predict(high_level_obs, latent_action)
 
             # collect data
-            # for term in range(model_output_dim):
-            #     logger.log('eval/term_' + str(term), predict_state[term])
-            #     logger2.log('tgt/term_'+ str(term), high_level_delta_obs[term])
-            for term in range(1):
-                logger.log('eval/vx', high_level_delta_obs[3])
-                logger.log('eval/vy', high_level_delta_obs[4])
-                logger2.log('tgt/vx', target_speed[0])
-                logger2.log('tgt/vy', target_speed[1])
+            for term in range(model_output_dim):
+                logger.log('eval/term_' + str(term), predict_state[term])
+                logger2.log('tgt/term_'+ str(term), high_level_delta_obs[term])
             logger.dump(total_latent_action)
             logger2.dump(total_latent_action)
+
 
             if utils.check_robot_dead(state):
                 break

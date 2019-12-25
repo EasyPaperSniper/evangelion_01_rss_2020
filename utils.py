@@ -65,7 +65,7 @@ class ReplayBuffer(object):
             0, self.capacity if self.full else self.idx, size=batch_size)
 
         obses = torch.as_tensor(normalization(self.obses[idxs], self.all_mean_var[0], self.all_mean_var[1]), device=self.device).float()
-        actions = torch.as_tensor(normalization(self.actions[idxs], self.all_mean_var[2], self.all_mean_var[3]), device=self.device)
+        actions = torch.as_tensor(normalization(self.actions[idxs], self.all_mean_var[2], self.all_mean_var[3]), device=self.device).float()
         rewards = torch.as_tensor(self.rewards[idxs], device=self.device)
         next_obses = torch.as_tensor(
             normalization(self.next_obses[idxs], self.all_mean_var[4], self.all_mean_var[5]), device=self.device).float()
@@ -164,31 +164,34 @@ def check_robot_dead(state):
 def check_data_useful(state):
     return True
 
-def calc_next_state(state,post_state):
-    next_state = np.array(post_state)
-    next_state[1] = post_state[1] + state['base_pos_x'][0]
-    next_state[2] = post_state[2] + state['base_pos_y'][0]
+def calc_next_state(state,predict_delta_state):
+    next_state = np.array(predict_delta_state)
+    next_state[1] = predict_delta_state[1] + state['base_pos_x'][0]
+    next_state[2] = predict_delta_state[2] + state['base_pos_y'][0]
 
-    pre_com_state= []
-    pre_com_state.append(math.sin(post_state[0]))
-    pre_com_state.append(math.cos(post_state[0]))
-    for info in post_state[3:]:
-        pre_com_state.append(info)
-    return next_state, pre_com_state
+    high_level_obs= []
+    high_level_obs.append(math.sin(predict_delta_state[0]))
+    high_level_obs.append(math.cos(predict_delta_state[0]))
+    for vel in predict_delta_state[3:]:
+        high_level_obs.append(vel)
+    return next_state, np.array(high_level_obs)
 
 
 #TODO: fix bug here
-def run_mpc(state, model, cost_func, latent_action_sample):
-    pre_com_state = HL_obs(state)
-    for latent_action in latent_action_sample:
-        post_state = model.forward(pre_com_state, latent_action)
-        next_state, pre_com_state = calc_next_state(state, post_state)
-    cost = cost_func(next_state)
+def run_mpc_without_norm(state, model, target_speed, latent_action_sample, mean_var):
+    high_level_obs = HL_obs(state)
+    for latent_action in latent_action_sample:        
+        high_level_obs_norm = normalization(high_level_obs, mean_var[0], mean_var[1])
+        latent_action_norm = normalization(latent_action,mean_var[2], mean_var[3] )
+        predict_delta_state_norm = model.predict(high_level_obs_norm, latent_action_norm)
+        predict_delta_state = inverse_normalization(predict_delta_state_norm, mean_var[4], mean_var[5])
+        next_state, high_level_obs = calc_next_state(state, predict_delta_state)
+    cost = np.linalg.norm(target_speed[0:2] - next_state[3:])
     return cost
 
 def get_init_r_yaw(init_foot_pos):
     r_yaw = np.zeros((6,2))
     for i in range(6):
-        r_yaw[i][0] = np.sqrt(init_foot_pos[i][0]**2 + init_foot_pos[i][1]**2)
+        r_yaw[i][0] = np.linalg.norm(init_foot_pos[i][0:2])
         r_yaw[i][1] = math.atan2(init_foot_pos[i][1], init_foot_pos[i][0])
     return r_yaw

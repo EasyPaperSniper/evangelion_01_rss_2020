@@ -42,7 +42,7 @@ class forward_model(nn.Module):
         latent_action = latent_action.unsqueeze(0)
         prediction = self.forward(model_obs, latent_action)
         return prediction.cpu().data.numpy().flatten()
-    #TODO: add planning part........
+
 
 # class curiosity_policy():
 #     def __init__(self):
@@ -69,6 +69,8 @@ class raibert_footstep_policy():
     def plan_latent_action(self,state, target_speed=None):
         latent_action = np.zeros(3)
         current_speed = state['base_velocity'][0:2]
+        if target_speed.any():
+            self.target_speed = target_speed
         
         speed_term = self.stance_duration/(2*self.control_frequency) * self.target_speed[0:2] #current_speed
         acceleration_term = self.speed_gain *(current_speed - self.target_speed[0:2])
@@ -96,7 +98,7 @@ class random_policy():
     '''
     The policy is defined in the polar coordinate (r, theta)
     '''
-    def __init__(self, z_dim, limits, low_level_policy_type='IK', sample_num = 20, predict_horizon = 1):
+    def __init__(self, z_dim, limits, low_level_policy_type='IK'):
         '''
         z_dim: dimension of the latent action
         scale: the scale of variance in different dim 
@@ -104,17 +106,19 @@ class random_policy():
         self.z_dim = z_dim
         self.limits = limits
         self.low_level_policy_type = low_level_policy_type
-        self.sample_num = sample_num
-        self.predict_horizon = predict_horizon
 
-    def sample_latent_action(self):
-        action = np.clip(np.random.randn(self.z_dim), -1,1)
-        if self.low_level_policy_type =='IK':
-            for i in range(0, self.z_dim-1, 2):
-                action[i] = action[i] * self.limits[0]
-                action[i+1] = action[i+1] * self.limits[1]
-            action[-1] = action[-1] * 0.05 * math.pi
 
+    def sample_latent_action(self, target_speed = None):
+        if not target_speed.any():
+            action = np.clip(np.random.randn(self.z_dim), -1,1)
+            if self.low_level_policy_type =='IK':
+                for i in range(0, self.z_dim-1, 2):
+                    action[i] = action[i] * self.limits[0]
+                    action[i+1] = action[i+1] * self.limits[1]
+                action[-1] = action[-1] * 0.05 * math.pi
+
+        else:
+            action = self.plan_latent_action(target_speed) + np.random.randn(self.z_dim) * 0.05
         return action
     
     def plan_latent_action(self, target_speed):
@@ -127,7 +131,7 @@ class random_policy():
         '''
 
         T = 50.0/60.0 # now the time for single step is hard coded
-        latent_action = np.random.randn(self.z_dim) * 0.1
+        latent_action = np.random.randn(self.z_dim) * 0.02
         latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
         latent_action[2] = target_speed[2] * T + latent_action[2]
         return latent_action
@@ -197,7 +201,7 @@ class high_level_planning():
             # self.policy_optimizer = torch.optim.Adam(self.policy.parameters(),lr=self.policy_lr)
         
 
-    def update_model(self, HL_replay_buffer):
+    def update_model(self, HL_replay_buffer, logger):
         for _ in range(self.model_update_steps):
             self.update_step += 1
 
@@ -214,6 +218,8 @@ class high_level_planning():
             self.model_optimizer.zero_grad()
             model_loss.backward()
             self.model_optimizer.step()
+            logger.log('train/model_loss', model_loss)
+            logger.dump(self.update_step)
 
 
     def update_model_norm(self, all_mean_var):
@@ -229,15 +235,15 @@ class high_level_planning():
         return utils.inverse_normalization(predict_norm, mean = self.all_mean_var[4], std = self.all_mean_var[5])
 
 
-    def sample_latent_action(self):
-        latent_action = self.policy.sample_latent_action()
+    def sample_latent_action(self,target_speed=None):
+        latent_action = self.policy.sample_latent_action(target_speed)
         return latent_action
 
     def update_policy(self):
         if self.update_sample_policy:
             self.policy.update_policy()
 
-    def plan_latent_action(self,state, target_speed = None, sample_num = 3, horizon = 3):
+    def plan_latent_action(self,state, target_speed = None, sample_num = 50, horizon = 1):
         if self.high_level_policy_type =='raibert':
             self.policy.target_speed = target_speed
             return self.policy.plan_latent_action(state,target_speed )
@@ -252,7 +258,7 @@ class high_level_planning():
             # run model to calculate reward
             cost = [self.p.apply(utils.run_mpc_without_norm,args=(state , self.forward_model, target_speed, latent_action_sample, self.all_mean_var)) 
                                         for latent_action_sample in latent_action_buffer]
-        
+
             # return best reward index and select action
             sqe_index = cost.index(min(cost))
             latent_action = latent_action_buffer[sqe_index][0]

@@ -63,10 +63,11 @@ def evaluate_model(args):
     for iter in range(args.num_iters):
         # reset robot to stand 
         if args.sim:
-            state = motion_library.exp_standing(env)
+            # state = motion_library.exp_standing(env)
             low_level_TG.reset(state)
         # generate new target speed
-        target_speed = np.clip(np.random.randn(3),-0.15,0.15)
+        target_speed = np.clip(0.2*np.random.randn(3),-0.2,0.2)
+        # target_speed = np.array([0.0,0.6,0.0])
 
         for _ in range(args.num_latent_action_per_iteration):
             # generate foot footstep position. If test, the footstep comes from optimization process
@@ -79,7 +80,7 @@ def evaluate_model(args):
                 state, total_timestep = env.step(action), total_timestep + 1
 
             post_com_state = state
-            total_latent_action += 1
+            
 
             # Check if robot still alive
             if utils.check_data_useful(state):
@@ -87,16 +88,17 @@ def evaluate_model(args):
                 predict_state = high_level_planning.model_predict(high_level_obs, latent_action)
 
             # collect data
-            # for term in range(model_output_dim):
-            #     logger.log('eval/term_' + str(term), predict_state[term])
-            #     logger2.log('tgt/term_'+ str(term), high_level_delta_obs[term])
+            for term in range(model_output_dim):
+                logger.log('eval/term_' + str(term), predict_state[term])
+                logger2.log('tgt/term_'+ str(term), high_level_delta_obs[term])
             for term in range(1):
-                logger.log('eval/vx', high_level_delta_obs[3])
-                logger.log('eval/vy', high_level_delta_obs[4])
+                logger.log('eval/vx', high_level_delta_obs[4])
+                logger.log('eval/vy', high_level_delta_obs[5])
                 logger2.log('tgt/vx', target_speed[0])
                 logger2.log('tgt/vy', target_speed[1])
             logger.dump(total_latent_action)
             logger2.dump(total_latent_action)
+            total_latent_action += 1
 
             if utils.check_robot_dead(state):
                 break

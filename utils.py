@@ -137,7 +137,8 @@ def HL_delta_obs(pre_com_state,post_com_state):
     '''
     # TODO: form the HL_obs
     high_level_delta_obs = []
-    high_level_delta_obs.append(post_com_state['base_ori_euler'][2] ) # predict direction 
+    high_level_delta_obs.append(math.sin(post_com_state['base_ori_euler'][2]) ) # predict direction 
+    high_level_delta_obs.append(math.cos(post_com_state['base_ori_euler'][2]) )
 
     high_level_delta_obs.append(post_com_state['base_pos_x'][0] - pre_com_state['base_pos_x'][0]) # position changes
     high_level_delta_obs.append(post_com_state['base_pos_y'][0] - pre_com_state['base_pos_y'][0])
@@ -165,14 +166,16 @@ def check_data_useful(state):
     return True
 
 def calc_next_state(state,predict_delta_state):
-    next_state = np.array(predict_delta_state)
-    next_state[1] = predict_delta_state[1] + state['base_pos_x'][0]
-    next_state[2] = predict_delta_state[2] + state['base_pos_y'][0]
+    next_state = np.zeros(np.shape(predict_delta_state)[0]-1)
+    next_state[0] = math.atan2(predict_delta_state[1], predict_delta_state[0])
+    next_state[1] = predict_delta_state[2] + state['base_pos_x'][0]
+    next_state[2] = predict_delta_state[3] + state['base_pos_y'][0]
+    next_state[3:] =  np.copy(predict_delta_state[4:])
 
     high_level_obs= []
-    high_level_obs.append(math.sin(predict_delta_state[0]))
-    high_level_obs.append(math.cos(predict_delta_state[0]))
-    for vel in predict_delta_state[3:]:
+    high_level_obs.append(predict_delta_state[0])
+    high_level_obs.append(predict_delta_state[1])
+    for vel in predict_delta_state[4:]:
         high_level_obs.append(vel)
     return next_state, np.array(high_level_obs)
 

@@ -20,11 +20,13 @@ def data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
         if args.sim:
             state = motion_library.exp_standing(env)
             low_level_TG.reset(state)
+        
         for _ in range(args.num_latent_action_per_iteration):
+            target_speed = np.clip(0.3 * np.random.randn(3),-0.3,0.3)
             # generate foot footstep position. If test, the footstep comes from optimization process
             pre_com_state = state
 
-            latent_action = high_level_planning.sample_latent_action()
+            latent_action = high_level_planning.sample_latent_action(target_speed)
 
             low_level_TG.update_latent_action(state,latent_action)
         
@@ -47,9 +49,11 @@ def data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 # load data buffer to train model 
 def train_model(args, HL_replay_buffer, high_level_planning ):
     model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
+    logger = Logger(model_save_dir, name = 'train')
     HL_replay_buffer.load_buffer(args.save_dir)
+    high_level_planning.load_mean_var(args.save_dir + '/buffer_data')
     
-    high_level_planning.update_model(HL_replay_buffer)
+    high_level_planning.update_model(HL_replay_buffer,logger)
     high_level_planning.save_data(model_save_dir)  
 
 
@@ -97,8 +101,8 @@ def main(args):
         init_state = init_state,
     )
 
-    # collect data
-    data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
+    # # # collect data
+    # data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )

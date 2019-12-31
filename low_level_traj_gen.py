@@ -68,8 +68,8 @@ class IK_traj_generator():
             des_foot_pos.append(des_single_foot_pos)
 
         self.des_foot_position_world = np.array(des_foot_pos)             
-        des_foot_position_com = daisy_kinematics.Foot2World(self.des_foot_position_world,self.des_body_ori)
-        des_leg_pose = daisy_kinematics.IK_foot2CoM(des_foot_position_com)
+        self.des_foot_position_com = daisy_kinematics.Foot2World(self.des_foot_position_world,self.des_body_ori)
+        des_leg_pose = daisy_kinematics.IK_foot2CoM(self.des_foot_position_com)
         
         return  des_leg_pose 
     

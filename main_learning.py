@@ -71,7 +71,7 @@ def main(args):
         init_state = motion_library.exp_standing(env)
     model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
     
-    HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device, args.num_iters * args.num_latent_action_per_iteration)
+    HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device,                             args.num_iters * args.num_latent_action_per_iteration)
 
     high_level_planning = HLPM.high_level_planning(
         device = device,

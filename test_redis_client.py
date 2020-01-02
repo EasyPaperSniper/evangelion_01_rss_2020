@@ -1,33 +1,83 @@
 # Run on laptop/ robotdev
 
+import numpy as np
 
-def collection_data():
-     for i in range():
-        # 
-        # take current state and plan for next z_action and sent to daisy
-        if args.test:  
-        high_level_planning.plan_latent_action(state, target_speed)
-        else:
-        latent_action = high_level_planning.sample_latent_action(target_speed)
-        latent_action_dict = {'HL_action': latent_action}
-        r.set('z_action', latent_action_dict)
+from main_learning import train_model
 
-        # wait for one cycle
-        while True:
-            finish_cycle = r.get()
-            if finish_cycle:
+def get_state(r):
+    while True:
+        key_dict = r.get('exp_keys')
+        if key_dict['finish_one_step']:
+            key_dict['finish_one_step'] = 0
+            r.set('exp_keys', key_dict)
+            state = r.get('state')
+            return state
+
+
+def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
+    latent_action = np.zeros(args.z_dim)
+    key_dict = {
+        'do_exp': 1,
+        'do_one_iter': 0,
+        'finish_one_step': 0,
+        'updated_z_action': 0,
+    }
+    latent_action_dict = {'z_action': latent_action}
+    
+    r.set('exp_keys', key_dict)
+    r.set('z_action', latent_action_dict)
+
+
+    for i in range(args.num_iters):
+        key_dict['do_one_iter'] = 1
+        r.set('exp_keys', key_dict)
+        
+        state = get_state(r)
+
+        for _ in range(args.num_latent_action_per_iteration):
+            
+            pre_com_state = state
+
+            # take current state and plan for next z_action and sent to daisy
+            if args.test:  
+                latent_action = high_level_planning.plan_latent_action(state, target_speed)
+            else:
+                latent_action = high_level_planning.sample_latent_action(target_speed)
+            
+            latent_action_dict['z_action'] = latent_action
+            key_dict['update_z_action'] = 1
+            r.set('z_action', latent_action_dict)
+            r.set('exp_keys', key_dict)
+
+            # check if finish one step
+            state = get_state(r)
+            post_com_state = state
+
+            if utils.check_data_useful(state):
+                high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
+                HL_replay_buffer.add(high_level_obs, latent_action, 0, high_level_delta_obs, 1)
+
+            if utils.check_robot_dead(state):
                 break
+        
 
-def train_model():
+        key_dict['do_one_iter'] = 0
+        r.set('exp_keys', key_dict)  
+
+    # experiment ends
+    key_dict['do_exp'] = 0
+    r.set('exp_keys', key_dict)
+
+
 
 
 def main():
     # initial initial redis
     r = redis.Redis(host='10.10.1.2', port=6379, db=0)
-    state = 
     # define high level stuff
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
+    model_obs_dim, model_output_dim = 4, 6
+    # model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
     utils.make_dir(args.save_dir)
     HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device,                 
                 args.num_iters * args.num_latent_action_per_iteration)
@@ -48,15 +98,9 @@ def main():
             model_update_steps = args.model_update_steps,
         )
 
+    collect_data_client(args, r, high_level_planning , HL_replay_buffer)
 
-    # keys ={
-    # finish one step key: for update z_action
-    # experiment start/end key: if key =  1 then start experiment
-    # 
-    #
-    # }
+    train_model(args, HL_replay_buffer, high_level_planning )
    
 
-
-    # experiment ends and set the startexperiment key 0
 

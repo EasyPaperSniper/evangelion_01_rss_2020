@@ -15,7 +15,7 @@ from logger import Logger
 
 
 # rollout to collect data
-def data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer):
+def collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer):
     for iter in range(args.num_iters):
         if args.sim:
             state = motion_library.exp_standing(env)
@@ -71,7 +71,7 @@ def main(args):
         init_state = motion_library.exp_standing(env)
     model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
     
-    HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device,                             args.num_iters * args.num_latent_action_per_iteration)
+    HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device,args.num_iters * args.num_latent_action_per_iteration)
 
     high_level_planning = HLPM.high_level_planning(
         device = device,
@@ -102,7 +102,7 @@ def main(args):
     )
 
     # # # collect data
-    # data_collection(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
+    # collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )

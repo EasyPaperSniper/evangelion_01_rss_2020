@@ -29,12 +29,14 @@ class IK_traj_generator():
 
         self.init_r_yaw = utils.get_init_r_yaw(self.init_foot_pos)
         
-        
-    def update_latent_action(self,state,latent_action):
+    def update_swing_stance(self):
+        self.swing_set, self.stance_set = np.copy(self.stance_set), np.copy(self.swing_set)
+    
+    def update_latent_action_params(self,state,latent_action):
         # update latent action
         self.latent_action = latent_action
         # update swing/stance leg set
-        self.swing_set, self.stance_set = np.copy(self.stance_set), np.copy(self.swing_set)
+        
         self.swing_start_foot_pos = get_foot_position_world_from_com(state)
         self.last_com_ori = state['base_ori_euler']
         self.last_des_body_ori[2] = self.last_des_body_ori[2] + self.latent_action[-1] # TODO: pretty annoying, need to change
@@ -51,6 +53,11 @@ class IK_traj_generator():
                 self.target_delta_xy[i][1] = self.init_r_yaw[i][0] * math.sin(angle) - self.latent_action[1] - self.swing_start_foot_pos[i][1]
 
 
+    def update_latent_action(self,state,latent_action):
+        self.update_swing_stance()
+        self.update_latent_action_params(state,latent_action)
+        
+        
     def get_action(self, state, phase):
         des_foot_pos = []
         self.des_body_ori[2] = (self.last_des_body_ori[2] - self.last_com_ori[2]) * phase + self.last_com_ori[2]

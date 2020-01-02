@@ -24,7 +24,8 @@ def run_LLTG(args, r, low_level_TG):
         ft = footstep_dict['z_action']
 
         # update swing/stance leg
-        low_level_TG.update_latent_action(state,latent_action)
+        low_level_TG.update_swing_stance())
+        
         # do IK 
         for step in range(1, args.num_timestep_per_footstep+1):
             # check if footstep update/set a key stuff

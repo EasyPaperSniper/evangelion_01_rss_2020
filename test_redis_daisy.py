@@ -12,7 +12,7 @@ def send_state(r,state):
     return r
 
 
-def run_LLTG_IK(args, r, low_level_TG):
+def run_LLTG_IK(env, args, r, low_level_TG):
     # initialize robot
     if args.sim:
         state = motion_library.exp_standing(env)
@@ -47,10 +47,12 @@ def run_LLTG_IK(args, r, low_level_TG):
 
 
 def main(args):
-
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     r = redis.Redis(host = 'localhost', port=6379, db = 0)
 
     # initilize env
+    env = daisy_API(sim=args.sim, render=args.render, logger = False)
+    env.set_control_mode(args.control_mode)
 
     low_level_TG = LLTG.low_level_TG(
             device = device,
@@ -68,7 +70,7 @@ def main(args):
         key_dict = r.get('exp_keys')
         if not key_dict['do_exp']:
             break
-        run_LLTG(args, r, low_level_TG)
+        run_LLTG(env, args, r, low_level_TG)
     
          
     

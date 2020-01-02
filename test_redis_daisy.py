@@ -1,7 +1,20 @@
 # run on Daisy
 # 
+import os
+import json
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-import redis 
+import numpy as np
+import torch
+import redis
+from daisy_API import daisy_API
+
+import daisy_hardware.motion_library as motion_library
+import high_level_planning_model as HLPM
+import low_level_traj_gen as LLTG
+from args_all import parse_args 
+import utils
+from logger import Logger
 
 
 def send_state(r,state):
@@ -36,7 +49,7 @@ def run_LLTG_IK(env, args, r, low_level_TG):
                 r.set('exp_keys', key_dict)
 
             action = low_level_TG.get_action(state, step)
-            state = env.step(action)
+            # state = env.step(action)
 
         # finish one step and update to high level 
         r = send_state(r, state)
@@ -50,9 +63,10 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     r = redis.Redis(host = 'localhost', port=6379, db = 0)
 
-    # initilize env
-    env = daisy_API(sim=args.sim, render=args.render, logger = False)
+    # initialize env
+    env = daisy_API(sim=args.sim, realsense = True,render=args.render, logger = False)
     env.set_control_mode(args.control_mode)
+    init_state = env.calc_state()
 
     low_level_TG = LLTG.low_level_TG(
             device = device,
@@ -70,7 +84,7 @@ def main(args):
         key_dict = r.get('exp_keys')
         if not key_dict['do_exp']:
             break
-        run_LLTG(env, args, r, low_level_TG)
+        run_LLTG_IK(env, args, r, low_level_TG)
     
          
     

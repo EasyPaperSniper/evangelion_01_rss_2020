@@ -1,7 +1,18 @@
 # Run on laptop/ robotdev
+import os
+import json
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 import numpy as np
+import torch
+import redis
 
+import daisy_hardware.motion_library as motion_library
+import high_level_planning_model as HLPM
+import low_level_traj_gen as LLTG
+from args_all import parse_args 
+import utils
+from logger import Logger
 from main_learning import train_model
 
 def get_state(r):
@@ -71,7 +82,7 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
 
 
 
-def main():
+def main(args):
     # initial initial redis
     r = redis.Redis(host='10.10.1.2', port=6379, db=0)
     # define high level stuff

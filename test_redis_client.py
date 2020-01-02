@@ -20,7 +20,7 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
         'do_exp': 1,
         'do_one_iter': 0,
         'finish_one_step': 0,
-        'updated_z_action': 0,
+        'updated_z_action': 1,
     }
     latent_action_dict = {'z_action': latent_action}
     

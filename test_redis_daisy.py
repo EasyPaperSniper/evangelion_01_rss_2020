@@ -9,34 +9,41 @@ def send_state(r,state):
     key_dict = r.get('exp_keys')
     key_dict['finish_one_step'] = 1
     r.set('exp_keys', key_dict)
+    return r
 
 
-def run_LLTG(args, r, low_level_TG):
+def run_LLTG_IK(args, r, low_level_TG):
     # initialize robot
     if args.sim:
         state = motion_library.exp_standing(env)
         low_level_TG.reset(state)
 
-    send_state(r, state)
+    r = send_state(r, state)
     
     while True:
-        footstep_dict = r.get('z_action')
-        ft = footstep_dict['z_action']
-
         # update swing/stance leg
-        low_level_TG.update_swing_stance())
+        low_level_TG.policy.update_swing_stance()
         
         # do IK 
         for step in range(1, args.num_timestep_per_footstep+1):
             # check if footstep update/set a key stuff
-            # update_latent_action
+            key_dict = r.get('exp_keys')
+            if key_dict['updated_z_action']:
+                footstep_dict = r.get('z_action')
+                z_action = footstep_dict['z_action']
+                low_level_TG.policy.update_latent_action_params(state,z_action)
+                key_dict['update_z_action'] = 0
+                r.set('exp_keys', key_dict)
+
             action = low_level_TG.get_action(state, step)
             state = env.step(action)
 
         # finish one step and update to high level 
-
-    
-        # if end 
+        r = send_state(r, state)
+        key_dict = r.get('exp_keys')
+        
+        if not key_dict['do_one_iter']:
+            break
 
 
 def main(args):

@@ -69,8 +69,3 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 z_action_all = torch.as_tensor(np.random.randn((num_primitive, z_dim)),  device= device).float()
 
-<<<<<<< HEAD
-=======
-
-# For every expert, collect all data
->>>>>>> 4b1e05dd65ce95e2fc9575c6a80cf0552c0788c8

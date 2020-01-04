@@ -80,13 +80,32 @@ class IK_traj_generator():
         
         return  des_leg_pose 
     
-# class NN_traj_generator():
-#     def __init__(self):
+class NN_tra_generator(nn.Module):
+    '''
+    The NN trajectory generator(low level controller) is a NN which is trained in a supervised manner
+    '''
+    def __init__(self, z_dim, policy_output_dim, policy_hidden_num, device):
+        '''
+        Initialize the structure of trajectory generator
+        '''
+        super().__init__()
+        self.device = device
+        self.trunk = nn.Sequential(
+            nn.Linear(1 + z_dim, policy_hidden_num ), nn.ReLU(),
+            nn.Linear(policy_hidden_num, policy_hidden_num), nn.ReLU(),
+            nn.Linear(policy_hidden_num, policy_output_dim))
 
-#     def get_action(self):
-    
-#     def update_TG(self):
-#         # try ARS???
+    def forward(self, z_action, phase):
+        low_level_input = torch.cat([z_action, phase], dim=1)
+        return self.trunk(low_level_input)
+
+    def get_action(self, z_action, phase):
+        latent_action = torch.FloatTensor(z_action).to(self.device)
+        latent_action = latent_action.unsqueeze(0)
+        phase_term = torch.FloatTensor(phase).to(self.device)
+        phase_term = phase_term.unsqueeze(0)
+        action = self.forward(latent_action, phase_term)
+        return action.cpu().data.numpy().flatten()
 
 class low_level_TG():
     def __init__(self, 
@@ -110,7 +129,9 @@ class low_level_TG():
 
         if low_level_policy_type == 'IK':
             self.policy = IK_traj_generator(init_state)
-
+        elif low_level_policy_type =='NN':
+            self.policy = NN_tra_generator(z_dim = z_dim, policy_output_dim = a_dim, policy_hidden_num = 32, device = device)
+        
         self.update_low_level_policy = update_low_level_policy
         if self.update_low_level_policy:
             self.batch_size = batch_size
@@ -121,6 +142,7 @@ class low_level_TG():
         self.policy.update_latent_action(state, latent_action)
 
     def get_action(self,state, t):
+        # for NN policy state is z_action 
         phase = float(t)/self.num_timestep_per_footstep
         action = self.policy.get_action(state, phase)
         return action 
@@ -132,3 +154,5 @@ class low_level_TG():
     def reset(self,state):
         if self.low_level_policy_type =='IK':
             self.policy.last_des_body_ori = np.array([0, 0, state['base_ori_euler'][2]])
+
+    

@@ -12,35 +12,10 @@ from daisy_API import daisy_API
 import daisy_hardware.motion_library as motion_library
 
 from logger import Logger
+from low_level_traj_gen import NN_tra_generator
 
 
-class NN_tra_generator(nn.Module):
-    '''
-    The NN trajectory generator(low level controller) is a NN which is trained in a supervised manner
-    '''
-    def __init__(self, z_dim, policy_output_dim, policy_hidden_num, device):
-        '''
-        Initialize the structure of trajectory generator
-        '''
-        super().__init__()
-        self.device = device
-        self.trunk = nn.Sequential(
-            nn.Linear(1 + z_dim, policy_hidden_num ), nn.ReLU(),
-            nn.Linear(policy_hidden_num, policy_hidden_num), nn.ReLU(),
-            nn.Linear(policy_hidden_num, policy_output_dim))
 
-
-    def forward(self, z_action, phase):
-        low_level_input = torch.cat([z_action, phase], dim=1)
-        return self.trunk(low_level_input)
-
-    def get_action(self, z_action, phase):
-        latent_action = torch.FloatTensor(z_action).to(self.device)
-        latent_action = latent_action.unsqueeze(0)
-        phase_term = torch.FloatTensor(phase).to(self.device)
-        phase_term = phase_term.unsqueeze(0)
-        action = self.forward(latent_action, phase_term)
-        return action.cpu().data.numpy().flatten()
 
 
 class train_NNTG():

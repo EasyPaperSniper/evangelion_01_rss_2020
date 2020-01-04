@@ -155,4 +155,9 @@ class low_level_TG():
         if self.low_level_policy_type =='IK':
             self.policy.last_des_body_ori = np.array([0, 0, state['base_ori_euler'][2]])
 
+    def load_model(self, save_dir):
+        if self.low_level_policy_type =='NN':
+            self.policy.load_state_dict(
+                torch.load('%s/NNTG.pt' % (save_dir)))
+
     

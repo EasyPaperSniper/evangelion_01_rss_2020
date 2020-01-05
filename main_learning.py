@@ -87,6 +87,7 @@ def main(args):
         low_level_policy_type = args.low_level_policy_type,
         num_timestep_per_footstep = args.num_timestep_per_footstep,
         model_update_steps = args.model_update_steps,
+        control_frequency=args.control_frequency
     )
     
     low_level_TG = LLTG.low_level_TG(
@@ -101,8 +102,11 @@ def main(args):
         init_state = init_state,
     )
 
+    if args.low_level_policy_type =='NN':
+        low_level_TG.load_model('./save_data/trial_1')
+
     # # # collect data
-    # collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
+    collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )

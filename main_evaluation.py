@@ -44,6 +44,7 @@ def evaluate_model(args):
         low_level_policy_type = args.low_level_policy_type,
         num_timestep_per_footstep = args.num_timestep_per_footstep,
         model_update_steps = args.model_update_steps,
+        control_frequency= args.control_frequency
     )
     high_level_planning.load_data(save_dir)
     high_level_planning.load_mean_var(args.save_dir + '/buffer_data')

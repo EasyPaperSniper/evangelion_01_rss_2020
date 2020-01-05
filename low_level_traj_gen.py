@@ -84,28 +84,35 @@ class NN_tra_generator(nn.Module):
     '''
     The NN trajectory generator(low level controller) is a NN which is trained in a supervised manner
     '''
-    def __init__(self, z_dim, policy_output_dim, policy_hidden_num, device):
+    def __init__(self, z_dim, policy_output_dim, policy_hidden_num, device, init_action=np.zeros(18)) :
         '''
         Initialize the structure of trajectory generator
         '''
         super().__init__()
+        self.init_action = init_action
         self.device = device
         self.trunk = nn.Sequential(
             nn.Linear(1 + z_dim, policy_hidden_num ), nn.ReLU(),
             nn.Linear(policy_hidden_num, policy_hidden_num), nn.ReLU(),
             nn.Linear(policy_hidden_num, policy_output_dim))
+        self.z_action = np.zeros((1,z_dim))
 
     def forward(self, z_action, phase):
+
         low_level_input = torch.cat([z_action, phase], dim=1)
         return self.trunk(low_level_input)
 
-    def get_action(self, z_action, phase):
-        latent_action = torch.FloatTensor(z_action).to(self.device)
+    def update_latent_action(self, state, latent_action):
+        self.z_action = latent_action
+
+    def get_action(self,state,  phase):
+        phase = np.array([phase])
+        latent_action = torch.FloatTensor(self.z_action).to(self.device)
         latent_action = latent_action.unsqueeze(0)
         phase_term = torch.FloatTensor(phase).to(self.device)
         phase_term = phase_term.unsqueeze(0)
         action = self.forward(latent_action, phase_term)
-        return action.cpu().data.numpy().flatten()
+        return action.cpu().data.numpy().flatten() + self.init_action
 
 class low_level_TG():
     def __init__(self, 
@@ -126,11 +133,12 @@ class low_level_TG():
         self.a_dim = a_dim
         self.num_timestep_per_footstep = num_timestep_per_footstep
         self.low_level_policy_type = low_level_policy_type
+        self.init_state = init_state
 
         if low_level_policy_type == 'IK':
             self.policy = IK_traj_generator(init_state)
         elif low_level_policy_type =='NN':
-            self.policy = NN_tra_generator(z_dim = z_dim, policy_output_dim = a_dim, policy_hidden_num = 32, device = device)
+            self.policy = NN_tra_generator( z_dim = z_dim, policy_output_dim = a_dim, policy_hidden_num = 32, device = device, init_action = self.init_state['j_pos'])
         
         self.update_low_level_policy = update_low_level_policy
         if self.update_low_level_policy:
@@ -142,7 +150,7 @@ class low_level_TG():
         self.policy.update_latent_action(state, latent_action)
 
     def get_action(self,state, t):
-        # for NN policy state is z_action 
+
         phase = float(t)/self.num_timestep_per_footstep
         action = self.policy.get_action(state, phase)
         return action 

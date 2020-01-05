@@ -98,7 +98,7 @@ class random_policy():
     '''
     The policy is defined in the polar coordinate (r, theta)
     '''
-    def __init__(self, z_dim, limits, low_level_policy_type='IK'):
+    def __init__(self, z_dim, limits, low_level_policy_type='IK',stance_duration = 50, control_frequency = 60):
         '''
         z_dim: dimension of the latent action
         scale: the scale of variance in different dim 
@@ -106,17 +106,22 @@ class random_policy():
         self.z_dim = z_dim
         self.limits = limits
         self.low_level_policy_type = low_level_policy_type
+        self.stance_duration = stance_duration
+        self.control_frequency = control_frequency
 
 
     def sample_latent_action(self, target_speed = None):
-        if not target_speed.any():
+        if self.low_level_policy_type =='NN':
+            action = np.random.normal(0.0, 0.5, self.z_dim)
+            return action
+
+        if not np.shape(target_speed):
             action = np.clip(np.random.randn(self.z_dim), -1,1)
             if self.low_level_policy_type =='IK':
                 for i in range(0, self.z_dim-1, 2):
                     action[i] = action[i] * self.limits[0]
                     action[i+1] = action[i+1] * self.limits[1]
                 action[-1] = action[-1] * 0.05 * math.pi
-
         else:
             action = self.plan_latent_action(target_speed) + np.random.randn(self.z_dim) * 0.05
         return action
@@ -129,8 +134,9 @@ class random_policy():
         output:
             latent action: np.array(self.z_dim)
         '''
-
-        T = 50.0/60.0 # now the time for single step is hard coded
+        if self.low_level_policy_type =='NN':
+            return self.sample_latent_action
+        T = float(self.stance_duration)/self.control_frequency # now the time for single step is hard coded
         latent_action = np.random.randn(self.z_dim) * 0.02
         latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
         latent_action[2] = target_speed[2] * T + latent_action[2]
@@ -151,6 +157,7 @@ class high_level_planning():
         num_timestep_per_footstep = 50,
         low_level_policy_type = 'IK',
         model_update_steps = 10,
+        control_frequency = 60,
         **kwargs
         ):
         # Initialize model & sampling policy & buffer
@@ -163,6 +170,7 @@ class high_level_planning():
         self.device = device
         self.high_level_policy_type = high_level_policy_type
         self.num_timestep_per_footstep = num_timestep_per_footstep
+        self.control_frequency = control_frequency
 
         # normalization parameter for model input/output
         self.all_mean_var = np.array([
@@ -188,10 +196,10 @@ class high_level_planning():
 
         if high_level_policy_type == 'random':
             self.p = mp.Pool(mp.cpu_count())
-            self.policy = random_policy(z_dim, self.limits, low_level_policy_type)
+            self.policy = random_policy(z_dim, self.limits, low_level_policy_type, stance_duration  = num_timestep_per_footstep, control_frequency = control_frequency)
             self.update_sample_policy = False
         elif high_level_policy_type == 'raibert':
-            self.policy = raibert_footstep_policy(stance_duration = num_timestep_per_footstep)
+            self.policy = raibert_footstep_policy(stance_duration  = num_timestep_per_footstep, control_frequency = control_frequency)
             self.update_sample_policy = False
         else:
             print('Not implement yet!!')

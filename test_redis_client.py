@@ -107,6 +107,7 @@ def main(args):
             low_level_policy_type = args.low_level_policy_type,
             num_timestep_per_footstep = args.num_timestep_per_footstep,
             model_update_steps = args.model_update_steps,
+            control_frequency= = args.control_frequency
         )
 
     collect_data_client(args, r, high_level_planning , HL_replay_buffer)

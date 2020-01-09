@@ -14,7 +14,7 @@ def parse_args():
     parser.add_argument('--sim',default= 1,type=int)
     parser.add_argument('--control_frequency',default=60,type=int)
     parser.add_argument('--render',default=0,type=int)
-    parser.add_argument('--seed',default=1,type=int)
+    parser.add_argument('--seed',default=3,type=int)
     parser.add_argument('--control_mode',default='position',type=str)
     parser.add_argument('--num_iters',default= 200,type=int)
     parser.add_argument('--num_latent_action_per_iteration',default=20,type=int)

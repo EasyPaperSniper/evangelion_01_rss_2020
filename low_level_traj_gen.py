@@ -95,7 +95,7 @@ class NN_tra_generator(nn.Module):
             nn.Linear(1 + z_dim, policy_hidden_num ), nn.ReLU(),
             nn.Linear(policy_hidden_num, policy_hidden_num), nn.ReLU(),
             nn.Linear(policy_hidden_num, policy_output_dim))
-        self.z_action = np.zeros((1,z_dim))
+        self.z_action = np.zeros(z_dim)
 
     def forward(self, z_action, phase):
 

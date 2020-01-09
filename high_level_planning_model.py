@@ -112,7 +112,7 @@ class random_policy():
 
     def sample_latent_action(self, target_speed = None):
         if self.low_level_policy_type =='NN':
-            action = np.random.normal(0.0, 0.5, self.z_dim)
+            action = 0.2 * np.random.randn(self.z_dim)
             return action
 
         if not np.shape(target_speed):
@@ -121,9 +121,9 @@ class random_policy():
                 for i in range(0, self.z_dim-1, 2):
                     action[i] = action[i] * self.limits[0]
                     action[i+1] = action[i+1] * self.limits[1]
-                action[-1] = action[-1] * 0.05 * math.pi
+                action[-1] = action[-1] * 0.04 * math.pi
         else:
-            action = self.plan_latent_action(target_speed) + np.random.randn(self.z_dim) * 0.05
+            action = self.plan_latent_action(target_speed) + np.clip(np.random.randn(self.z_dim) , -1, 1) * 0.03
         return action
     
     def plan_latent_action(self, target_speed):
@@ -135,11 +135,15 @@ class random_policy():
             latent action: np.array(self.z_dim)
         '''
         if self.low_level_policy_type =='NN':
-            return self.sample_latent_action
-        T = float(self.stance_duration)/self.control_frequency # now the time for single step is hard coded
-        latent_action = np.random.randn(self.z_dim) * 0.02
-        latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
-        latent_action[2] = target_speed[2] * T + latent_action[2]
+            return self.sample_latent_action()
+        # T = float(self.stance_duration)/self.control_frequency # now the time for single step is hard coded
+        # latent_action = np.clip(np.random.randn(self.z_dim), -1,1) * 0.02
+        # latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
+        # latent_action[2] = target_speed[2] * T + latent_action[2]
+        latent_action = np.clip(np.random.randn(3), -3,3) * 0.1 #+ target_speed * 0.05
+
+        # for circle
+        latent_action[2] = np.random.randn(1)[0] * 0.15
         return latent_action
 
 class high_level_planning():
@@ -251,7 +255,7 @@ class high_level_planning():
         if self.update_sample_policy:
             self.policy.update_policy()
 
-    def plan_latent_action(self,state, target_speed = None, sample_num = 50, horizon = 1):
+    def plan_latent_action(self,state, target_speed = None, sample_num = 1000, horizon = 1):
         if self.high_level_policy_type =='raibert':
             self.policy.target_speed = target_speed
             return self.policy.plan_latent_action(state,target_speed )
@@ -259,6 +263,7 @@ class high_level_planning():
         if self.high_level_policy_type == 'random':
             # sample bunch of actions and plan for single step
             latent_action_buffer = np.empty([sample_num, horizon, self.z_dim])
+
             for sample_index in range(sample_num):
                 for horizon_index in range(horizon):
                     latent_action_buffer[sample_index][horizon_index] = self.policy.plan_latent_action(target_speed)

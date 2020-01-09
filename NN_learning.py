@@ -112,7 +112,7 @@ tra_learning = train_NNTG( num_primitive = num_primitive,
 
 # # train NNTG
 # print('Z_action before optimization', tra_learning.z_action_all)
-# tra_learning.update_model(num_iteration =1000, save_dir = './save_data/trial_1')
+# tra_learning.update_model(num_iteration =1000, save_dir = './save_data/trial_2')
 # print('Z_action after optimization', tra_learning.z_action_all)
 # [[-0.1715],
 #         [ 0.0839],
@@ -125,7 +125,7 @@ tra_learning = train_NNTG( num_primitive = num_primitive,
 
 # # test NNTG
 # test_num = 5
-tra_learning.load_model(save_dir = './save_data/trial_1')
+# tra_learning.load_model(save_dir = './save_data/trial_2')
 # record_data = np.empty((test_num,100))
 # z_action = np.random.normal(0.0, 0.5, (test_num,1))
 # axis = range(100)
@@ -145,48 +145,48 @@ tra_learning.load_model(save_dir = './save_data/trial_1')
 
 
 # test in simulation 
-test_length = 1000
-z = 0.4106
-tgt_com_tra = np.empty((3,test_length))
-test_com_tra = np.empty((3, test_length))
-env = daisy_API(sim=True, render=True, logger = False)
-env.set_control_mode('position')
+# test_length = 1000
+# z = 0.4106
+# tgt_com_tra = np.empty((3,test_length))
+# test_com_tra = np.empty((3, test_length))
+# env = daisy_API(sim=True, render=True, logger = False)
+# env.set_control_mode('position')
+
+# # state = motion_library.exp_standing(env, shoulder=0.3, elbow = 1.3)
+# # init_action = state['j_pos']
+# # for i in range(test_length):
+# #     action = expert_control(i= ((i+1)%50)/50.0 ,w = 1, phase=0.5) + init_action
+# #     state = env.step(action)
+# #     tgt_com_tra[0][i] = state['base_pos_x'][0]
+# #     tgt_com_tra[1][i] = state['base_pos_y'][0]
+# #     tgt_com_tra[2][i] = state['base_ori_euler'][2]
 
 # state = motion_library.exp_standing(env, shoulder=0.3, elbow = 1.3)
 # init_action = state['j_pos']
 # for i in range(test_length):
-#     action = expert_control(i= ((i+1)%50)/50.0 ,w = 1, phase=0.5) + init_action
+#     action = tra_learning.policy.get_action(np.array([z]), np.array([((i+1)%50)/50.0])) + init_action
 #     state = env.step(action)
-#     tgt_com_tra[0][i] = state['base_pos_x'][0]
-#     tgt_com_tra[1][i] = state['base_pos_y'][0]
-#     tgt_com_tra[2][i] = state['base_ori_euler'][2]
+#     test_com_tra[0][i] = state['base_pos_x'][0]
+#     test_com_tra[1][i] = state['base_pos_y'][0]
+#     test_com_tra[2][i] = state['base_ori_euler'][2]
 
-state = motion_library.exp_standing(env, shoulder=0.3, elbow = 1.3)
-init_action = state['j_pos']
-for i in range(test_length):
-    action = tra_learning.policy.get_action(np.array([z]), np.array([((i+1)%50)/50.0])) + init_action
-    state = env.step(action)
-    test_com_tra[0][i] = state['base_pos_x'][0]
-    test_com_tra[1][i] = state['base_pos_y'][0]
-    test_com_tra[2][i] = state['base_ori_euler'][2]
+# np.save('./save_data/test_tra/expert_tra.npy', tgt_com_tra)
+# np.save('./save_data/test_tra/test_tra.npy', test_com_tra)
 
-np.save('./save_data/test_tra/expert_tra.npy', tgt_com_tra)
-np.save('./save_data/test_tra/test_tra.npy', test_com_tra)
+# tgt_com_tra = np.load('./save_data/test_tra/expert_tra.npy')
+# test_com_tra = np.load('./save_data/test_tra/test_tra.npy')
 
-tgt_com_tra = np.load('./save_data/test_tra/expert_tra.npy')
-test_com_tra = np.load('./save_data/test_tra/test_tra.npy')
-
-axis = range(np.shape(tgt_com_tra)[1])
+# axis = range(np.shape(tgt_com_tra)[1])
     
-plt.rcParams['figure.figsize'] = (8, 10)
-fig, (ax1,ax2,ax3) = plt.subplots(3,1)
-ax1.plot(axis, tgt_com_tra[0])
-ax1.plot(axis, test_com_tra[0])
-ax1.set_title('X tracking')
-ax2.plot(axis, tgt_com_tra[1])
-ax2.plot(axis, test_com_tra[1])
-ax2.set_title('Y tracking')
-ax3.plot(axis, tgt_com_tra[2])
-ax3.plot(axis, test_com_tra[2])
-ax3.set_title('yaw tracking')
-plt.show()
+# plt.rcParams['figure.figsize'] = (8, 10)
+# fig, (ax1,ax2,ax3) = plt.subplots(3,1)
+# ax1.plot(axis, tgt_com_tra[0])
+# ax1.plot(axis, test_com_tra[0])
+# ax1.set_title('X tracking')
+# ax2.plot(axis, tgt_com_tra[1])
+# ax2.plot(axis, test_com_tra[1])
+# ax2.set_title('Y tracking')
+# ax3.plot(axis, tgt_com_tra[2])
+# ax3.plot(axis, test_com_tra[2])
+# ax3.set_title('yaw tracking')
+# plt.show()

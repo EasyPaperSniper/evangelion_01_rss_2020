@@ -34,7 +34,7 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
         for _ in range(args.num_latent_action_per_iteration):
             pre_com_state = ru.get_state(r)
             # target = np.clip(0.3 * np.random.randn(3),-0.4,0.4)
-            target = np.zero(args.z_dim)
+            target = np.zeros(args.z_dim)
             # take current state and plan for next z_action and sent to daisy
             if args.test:  
                 latent_action = high_level_planning.plan_latent_action(pre_com_state, target)

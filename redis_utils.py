@@ -34,6 +34,7 @@ def set_state(r, state, exp_variables):
     set_variables(r, exp_variables)
 
 def wait_for_one_step(r):
+    print(' Wait for one step')
     while True:
         exp_variables = get_variables(r)
         if exp_variables['finish_one_step'][0]:

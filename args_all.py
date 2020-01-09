@@ -10,9 +10,9 @@ IK_setting = {
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test',default=1,type=int)
-    parser.add_argument('--sim',default= 1,type=int)
-    parser.add_argument('--control_frequency',default=60,type=int)
+    parser.add_argument('--test',default=0,type=int)
+    parser.add_argument('--sim',default=0,type=int)
+    parser.add_argument('--control_frequency',default=100,type=int)
     parser.add_argument('--render',default=0,type=int)
     parser.add_argument('--seed',default=3,type=int)
     parser.add_argument('--control_mode',default='position',type=str)

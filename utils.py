@@ -181,15 +181,23 @@ def calc_next_state(state,predict_delta_state):
 
 
 #TODO: fix bug here
-def run_mpc_without_norm(state, model, target_speed, latent_action_sample, mean_var):
+def run_mpc_without_norm(state, model, target, latent_action_sample, mean_var):
     high_level_obs = HL_obs(state)
+    cost = 0
     for latent_action in latent_action_sample:        
         high_level_obs_norm = normalization(high_level_obs, mean_var[0], mean_var[1])
         latent_action_norm = normalization(latent_action,mean_var[2], mean_var[3] )
         predict_delta_state_norm = model.predict(high_level_obs_norm, latent_action_norm)
         predict_delta_state = inverse_normalization(predict_delta_state_norm, mean_var[4], mean_var[5])
         next_state, high_level_obs = calc_next_state(state, predict_delta_state)
-    cost = np.linalg.norm(target_speed[0:2] - next_state[3:])
+        # cost += np.linalg.norm(target[0:2] - next_state[3:]) + np.linalg.norm(target[2] - next_state[0])
+
+    # add target position 
+    # theta =  0 
+    # cost = 4 * np.linalg.norm(target[0:2] - next_state[1:3]) + np.linalg.norm(theta - next_state[0])
+
+    # square circle cost
+    cost  =  2*np.linalg.norm(target[0:2] - next_state[1:3]) +  np.linalg.norm(target[2:] - high_level_obs[0:2])
     return cost
 
 def get_init_r_yaw(init_foot_pos):

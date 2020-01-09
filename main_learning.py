@@ -22,7 +22,7 @@ def collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer):
             low_level_TG.reset(state)
         
         for _ in range(args.num_latent_action_per_iteration):
-            target_speed = np.clip(0.3 * np.random.randn(3),-0.3,0.3)
+            target_speed = np.clip(0.3 * np.random.randn(3),-0.4,0.4)
             # generate foot footstep position. If test, the footstep comes from optimization process
             pre_com_state = state
 
@@ -43,15 +43,16 @@ def collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer):
             if utils.check_robot_dead(state):
                 break
     
-    HL_replay_buffer.save_buffer(args.save_dir)
+    model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
+    HL_replay_buffer.save_buffer(model_save_dir)
 
 
 # load data buffer to train model 
 def train_model(args, HL_replay_buffer, high_level_planning ):
     model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
     logger = Logger(model_save_dir, name = 'train')
-    HL_replay_buffer.load_buffer(args.save_dir)
-    high_level_planning.load_mean_var(args.save_dir + '/buffer_data')
+    HL_replay_buffer.load_buffer(model_save_dir )
+    high_level_planning.load_mean_var(model_save_dir  + '/buffer_data')
     
     high_level_planning.update_model(HL_replay_buffer,logger)
     high_level_planning.save_data(model_save_dir)  
@@ -68,7 +69,11 @@ def main(args):
     utils.make_dir(args.save_dir)
 
     if args.sim:
-        init_state = motion_library.exp_standing(env)
+        if args.low_level_policy_type =='NN':
+            init_state = motion_library.exp_standing(env, shoulder = 0.3, elbow = 1.3)
+        else:
+            init_state = motion_library.exp_standing(env)
+        
     model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
     
     HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device,args.num_iters * args.num_latent_action_per_iteration)
@@ -96,17 +101,17 @@ def main(args):
         a_dim = args.a_dim,
         num_timestep_per_footstep = args.num_timestep_per_footstep,
         batch_size = args.batch_size,
-        low_level_policy_type = args.low_level_policy_type,
+        low_level_policy_type = args.low_level_policy_type, 
         update_low_level_policy = args.update_low_level_policy,
         update_low_level_policy_lr = args.update_low_level_policy_lr,
         init_state = init_state,
     )
 
     if args.low_level_policy_type =='NN':
-        low_level_TG.load_model('./save_data/trial_1')
+        low_level_TG.load_model('./save_data/trial_2')
 
     # # # collect data
-    collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
+    # collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )

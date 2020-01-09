@@ -80,11 +80,17 @@ def main(args):
             init_state = init_state,
         )
 
+    a =  input('Start client')
+
     while True:
         key_dict = r.get('exp_keys')
         if not key_dict['do_exp']:
             break
         run_LLTG_IK(env, args, r, low_level_TG)
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(args)
     
          
     

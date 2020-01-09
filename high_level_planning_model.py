@@ -123,7 +123,11 @@ class random_policy():
                     action[i+1] = action[i+1] * self.limits[1]
                 action[-1] = action[-1] * 0.04 * math.pi
         else:
-            action = self.plan_latent_action(target_speed) + np.clip(np.random.randn(self.z_dim) , -1, 1) * 0.03
+            T = float(self.stance_duration)/self.control_frequency # now the time for single step is hard coded
+            latent_action = np.clip(np.random.randn(self.z_dim), -1,1) * 0.02
+            latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
+            latent_action[2] = target_speed[2] * T + latent_action[2]
+            action = latent_action + np.clip(np.random.randn(self.z_dim) , -2, 2) * 0.05
         return action
     
     def plan_latent_action(self, target_speed):
@@ -136,14 +140,9 @@ class random_policy():
         '''
         if self.low_level_policy_type =='NN':
             return self.sample_latent_action()
-        # T = float(self.stance_duration)/self.control_frequency # now the time for single step is hard coded
-        # latent_action = np.clip(np.random.randn(self.z_dim), -1,1) * 0.02
-        # latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
-        # latent_action[2] = target_speed[2] * T + latent_action[2]
-        latent_action = np.clip(np.random.randn(3), -3,3) * 0.1 #+ target_speed * 0.05
-
-        # for circle
-        latent_action[2] = np.random.randn(1)[0] * 0.15
+        
+        latent_action = np.clip(np.random.randn(3), -2,2) * 0.1 #+ target_speed * 0.05
+        latent_action[2] = np.random.randn(1)[0] * 0.02
         return latent_action
 
 class high_level_planning():

@@ -69,13 +69,13 @@ def evaluate_model(args):
 
     square_circle_test = []
     # Circle Target
-    for i in range(1,16):
-        target_theta = math.pi* 2 / 16 * i
-        square_circle_test.append(np.array([ 2 - 2 * math.cos(target_theta), 2 * math.sin(target_theta) , math.sin(-target_theta), math.cos(-target_theta)]))
+    for i in range(1,32):
+        target_theta = math.pi* 2 / 32 * i
+        square_circle_test.append(np.array([ 4 - 4 * math.cos(target_theta), 4 * math.sin(target_theta) ,0, 0]))
     #Square target
-    square_circle_test.append(np.array([-2.0, 2.0, 0, 1]))
-    square_circle_test.append(np.array([-4.0, -0.0, 0, 1]))
-    square_circle_test.append(np.array([-2.0, -2.0, 0, 1]))
+    square_circle_test.append(np.array([-4.0, 4.0, 0, 1]))
+    square_circle_test.append(np.array([-8.0, -0.0, 0, 1]))
+    square_circle_test.append(np.array([-4.0, -4.0, 0, 1]))
     square_circle_test.append(np.array([-0.0, -0.0, 0, 1]))
 
 
@@ -126,7 +126,7 @@ def evaluate_model(args):
                 if target_index == np.shape(square_circle_test)[0]:
                     break
 
-            if j>250:
+            if j>500:
                 print('Did not reach goal')
                 break
 

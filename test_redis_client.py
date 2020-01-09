@@ -12,57 +12,42 @@ import high_level_planning_model as HLPM
 import low_level_traj_gen as LLTG
 from args_all import parse_args 
 import utils
+import redis_utils as ru
 from logger import Logger
 from main_learning import train_model
 
-def get_state(r):
-    while True:
-        key_dict = r.get('exp_keys')
-        if key_dict['finish_one_step']:
-            key_dict['finish_one_step'] = 0
-            r.set('exp_keys', key_dict)
-            state = r.get('state')
-            return state
-
 
 def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
-    latent_action = np.zeros(args.z_dim)
-    key_dict = {
-        'do_exp': 1,
-        'do_one_iter': 0,
-        'finish_one_step': 0,
-        'updated_z_action': 1,
+    exp_variables = {
+        'do_exp': [1],
+        'do_one_iter': [0],
+        'finish_one_step': [0],
+        'updated_z_action': [1],
     }
-    latent_action_dict = {'z_action': latent_action}
-    
-    r.set('exp_keys', key_dict)
-    r.set('z_action', latent_action_dict)
-
+    ru.set_variables(r, exp_variables)
 
     for i in range(args.num_iters):
-        key_dict['do_one_iter'] = 1
-        r.set('exp_keys', key_dict)
-        
-        state = get_state(r)
+        exp_variables['do_one_iter'] = [1]
+        ru.set_variables(r, exp_variables)
+        state = ru.get_state(r)
 
         for _ in range(args.num_latent_action_per_iteration):
-            
-            pre_com_state = state
-
+            pre_com_state = ru.get_state(r)
+            # target = np.clip(0.3 * np.random.randn(3),-0.4,0.4)
+            target = np.zero(args.z_dim)
             # take current state and plan for next z_action and sent to daisy
             if args.test:  
-                latent_action = high_level_planning.plan_latent_action(state, target_speed)
+                latent_action = high_level_planning.plan_latent_action(pre_com_state, target)
             else:
-                latent_action = high_level_planning.sample_latent_action(target_speed)
+                latent_action = high_level_planning.sample_latent_action(target)
             
-            latent_action_dict['z_action'] = latent_action
-            key_dict['update_z_action'] = 1
-            r.set('z_action', latent_action_dict)
-            r.set('exp_keys', key_dict)
+            exp_variables['z_action'] = latent_action.tolist()
+            exp_variables['update_z_action'] = [1]
+            ru.set_variables(r, exp_variables)
 
             # check if finish one step
-            state = get_state(r)
-            post_com_state = state
+            ru.wait_for_one_step(r)
+            post_com_state = ru.get_state(r)
 
             if utils.check_data_useful(state):
                 high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
@@ -71,15 +56,12 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
             if utils.check_robot_dead(state):
                 break
         
-
-        key_dict['do_one_iter'] = 0
-        r.set('exp_keys', key_dict)  
+        exp_variables['do_one_iter'] = 0
+        ru.set_variables(r, exp_variables)
 
     # experiment ends
-    key_dict['do_exp'] = 0
-    r.set('exp_keys', key_dict)
-
-
+    exp_variables['exp_variables'] = 0
+    ru.set_variables(r, exp_variables)
 
 
 def main(args):

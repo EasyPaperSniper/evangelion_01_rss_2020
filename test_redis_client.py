@@ -62,6 +62,8 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
     # experiment ends
     exp_variables['exp_variables'] = 0
     ru.set_variables(r, exp_variables)
+    model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
+    HL_replay_buffer.save_buffer(model_save_dir)
 
 
 def main(args):
@@ -94,7 +96,7 @@ def main(args):
 
     collect_data_client(args, r, high_level_planning , HL_replay_buffer)
 
-    train_model(args, HL_replay_buffer, high_level_planning )
+    # train_model(args, HL_replay_buffer, high_level_planning )
    
 
 if __name__ == "__main__":

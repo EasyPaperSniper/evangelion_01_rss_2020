@@ -39,7 +39,7 @@ def wait_for_key(r,key):
     print(' Wait for' + key)
     while True:
         exp_variables = get_variables(r)
-        if exp_variables[key][0]:
+        if exp_variables[key]:
             exp_variables[key] = [0]
             set_variables(r, exp_variables)
             print('Finished ' + key)

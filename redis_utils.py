@@ -7,6 +7,7 @@ state_dict = ['base_pos_x', 'base_pos_y', 'base_pos_z', 'base_ori_euler', 'base_
 def set_variables(r, exp_variables):
     exp_variables = json.dumps(exp_variables)
     r.set('exp_variables', exp_variables)
+    return exp_variables
 
 def get_variables(r):
     exp_variables = r.get('exp_variables')
@@ -32,15 +33,17 @@ def get_state(r):
 def set_state(r, state, exp_variables):
     exp_variables = wrap_state(state, exp_variables)
     set_variables(r, exp_variables)
+    return exp_variables
 
-def wait_for_one_step(r):
-    print(' Wait for one step')
+def wait_for_key(r,key):
+    print(' Wait for' + key)
     while True:
         exp_variables = get_variables(r)
-        if exp_variables['finish_one_step'][0]:
-            exp_variables['finish_one_step'] = [0]
+        if exp_variables[key][0]:
+            exp_variables[key] = [0]
             set_variables(r, exp_variables)
-            break
+            print('Finished ' + key)
+            return exp_variables
 
 
 

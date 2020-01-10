@@ -29,12 +29,16 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
     for i in range(args.num_iters):
         exp_variables['do_one_iter'] = [1]
         ru.set_variables(r, exp_variables)
+
+        input('Press any key after initialized robot')
+        ru.wait_for_key(r, 'finish_one_step')
         state = ru.get_state(r)
 
         for _ in range(args.num_latent_action_per_iteration):
-            pre_com_state = ru.get_state(r)
+            pre_com_state = state
             # target = np.clip(0.3 * np.random.randn(3),-0.4,0.4)
             target = np.zeros(args.z_dim)
+            
             # take current state and plan for next z_action and sent to daisy
             if args.test:  
                 latent_action = high_level_planning.plan_latent_action(pre_com_state, target)
@@ -46,14 +50,15 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
             ru.set_variables(r, exp_variables)
 
             # check if finish one step
-            ru.wait_for_one_step(r)
-            post_com_state = ru.get_state(r)
+            ru.wait_for_key(r, 'finish_one_step')
+            state = ru.get_state(r)
+            post_com_state = state 
 
-            if utils.check_data_useful(state):
+            if utils.check_data_useful(post_com_state):
                 high_level_obs, high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
                 HL_replay_buffer.add(high_level_obs, latent_action, 0, high_level_delta_obs, 1)
 
-            if utils.check_robot_dead(state):
+            if utils.check_robot_dead(post_com_state):
                 break
         
         exp_variables['do_one_iter'] = 0
@@ -67,9 +72,7 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
 
 
 def main(args):
-    # initial initial redis
     r = redis.Redis(host='10.10.1.2', port=6379, db=0)
-    # define high level stuff
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model_obs_dim, model_output_dim = 4, 6
     # model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))

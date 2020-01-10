@@ -3,6 +3,7 @@
 import os
 import json
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+import time
 
 import numpy as np
 import torch
@@ -15,14 +16,7 @@ import low_level_traj_gen as LLTG
 from args_all import parse_args 
 import utils
 from logger import Logger
-
-
-def send_state(r,state):
-    r.set('state', state)
-    key_dict = r.get('exp_keys')
-    key_dict['finish_one_step'] = 1
-    r.set('exp_keys', key_dict)
-    return r
+import redis_utils as ru
 
 
 def run_LLTG_IK(env, args, r, low_level_TG):
@@ -30,8 +24,13 @@ def run_LLTG_IK(env, args, r, low_level_TG):
     if args.sim:
         state = motion_library.exp_standing(env)
         low_level_TG.reset(state)
+    
 
-    r = send_state(r, state)
+    input(" Press anything to start")
+    state = env.calc_state()
+    exp_variables = get_variables(r)
+    exp_variables = ru.set_state(r,state, exp_variables)
+
     
     while True:
         # update swing/stance leg
@@ -40,22 +39,23 @@ def run_LLTG_IK(env, args, r, low_level_TG):
         # do IK 
         for step in range(1, args.num_timestep_per_footstep+1):
             # check if footstep update/set a key stuff
-            key_dict = r.get('exp_keys')
-            if key_dict['updated_z_action']:
-                footstep_dict = r.get('z_action')
-                z_action = footstep_dict['z_action']
+            exp_variables = get_variables(r)
+            if exp_variables['updated_z_action'][0]:
+                z_action = np.array(exp_variables['z_action'])
                 low_level_TG.policy.update_latent_action_params(state,z_action)
-                key_dict['update_z_action'] = 0
-                r.set('exp_keys', key_dict)
+                exp_variables['update_z_action'] = [0]
+                set_variables(r, exp_variables)
 
             action = low_level_TG.get_action(state, step)
             # state = env.step(action)
+            time.sleep(0.01)
+
 
         # finish one step and update to high level 
-        r = send_state(r, state)
-        key_dict = r.get('exp_keys')
-        
-        if not key_dict['do_one_iter']:
+        exp_variables['finish_one_step'] = [1]
+        ru.set_state(r,state, exp_variables)
+        exp_variables = get_variables(r)
+        if not exp_variables['do_one_iter'][0]:
             break
 
 
@@ -83,14 +83,15 @@ def main(args):
     a =  input('Start client')
 
     while True:
+        print('New Iteration ??')
         key_dict = r.get('exp_keys')
-        if not key_dict['do_exp']:
+        if not key_dict['do_exp'][0]:
             break
         run_LLTG_IK(env, args, r, low_level_TG)
 
 if __name__ == "__main__":
     args = parse_args()
     main(args)
-    
+
          
     

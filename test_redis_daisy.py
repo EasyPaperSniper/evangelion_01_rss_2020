@@ -39,12 +39,12 @@ def run_LLTG_IK(env, args, r, low_level_TG):
         # do IK 
         for step in range(1, args.num_timestep_per_footstep+1):
             # check if footstep update/set a key stuff
-            exp_variables = get_variables(r)
-            if exp_variables['updated_z_action']:
+            exp_variables = ru.get_variables(r)
+            if exp_variables['updated_z_action'][0]:
                 z_action = np.array(exp_variables['z_action'])
                 low_level_TG.policy.update_latent_action_params(state,z_action)
                 exp_variables['update_z_action'] = [0]
-                set_variables(r, exp_variables)
+                ru.set_variables(r, exp_variables)
 
             action = low_level_TG.get_action(state, step)
             # state = env.step(action)
@@ -54,8 +54,8 @@ def run_LLTG_IK(env, args, r, low_level_TG):
         # finish one step and update to high level 
         exp_variables['finish_one_step'] = [1]
         ru.set_state(r,state, exp_variables)
-        exp_variables = get_variables(r)
-        if not exp_variables['do_one_iter']:
+        exp_variables = ru.get_variables(r)
+        if not exp_variables['do_one_iter'][0]:
             break
 
 
@@ -80,11 +80,11 @@ def main(args):
             init_state = init_state,
         )
 
-    a =  input('Start client')
+    input('Start client')
 
     while True:
         print('New Iteration ??')
-        key_dict = r.get('exp_keys')
+        exp_variables = r.get('exp_variables')
         if not key_dict['do_exp']:
             break
         run_LLTG_IK(env, args, r, low_level_TG)

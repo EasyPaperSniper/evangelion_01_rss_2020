@@ -47,7 +47,8 @@ def run_LLTG_IK(env, args, r):
     exp_variables = ru.get_variables(r)
     exp_variables['finish_one_step'] = [1]
     exp_variables = ru.set_state(r,state, exp_variables)
-    state = motion_library.hold_position(env, shoulder = SHOULDER, elbow = ELBOW)
+    # state = motion_library.hold_position(env, shoulder = SHOULDER, elbow = ELBOW)
+    input('hdjkshfks')
     print('Start operation!')
 
 
@@ -71,6 +72,7 @@ def run_LLTG_IK(env, args, r):
             # state = env.step(action)
             t_end = datetime.datetime.now()
             t_diff = (t_end - t_start).total_seconds()
+            print(t_diff)
             time.sleep(max(0, 1.0/args.control_frequency - t_diff))
 
 

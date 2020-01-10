@@ -19,20 +19,20 @@ from main_learning import train_model
 
 def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
     exp_variables = {
-        'do_exp': [1],
-        'do_one_iter': [0],
+        'finish_exp': [0],
+        'not_finish_one_iter': [1],
         'finish_one_step': [0],
-        'updated_z_action': [1],
+        'update_z_action': [0],
     }
     ru.set_variables(r, exp_variables)
 
     for i in range(args.num_iters):
-        exp_variables['do_one_iter'] = [1]
-        ru.set_variables(r, exp_variables)
-
+        
+        ru.wait_for_key(r,'not_finish_one_iter', change= False)
+        print('Iteration: ' , i+1)
         input('Press any key after initialized robot')
-        ru.wait_for_key(r, 'finish_one_step')
-        state = ru.get_state(r)
+        ru.wait_for_key(r,'finish_one_step')
+        state, exp_variables = ru.get_state(r)
 
         for _ in range(args.num_latent_action_per_iteration):
             pre_com_state = state
@@ -51,7 +51,7 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
 
             # check if finish one step
             ru.wait_for_key(r, 'finish_one_step')
-            state = ru.get_state(r)
+            state, exp_variables = ru.get_state(r)
             post_com_state = state 
 
             if utils.check_data_useful(post_com_state):
@@ -60,15 +60,19 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
 
             if utils.check_robot_dead(post_com_state):
                 break
+            print(exp_variables)
         
-        exp_variables['do_one_iter'] = 0
+        exp_variables['not_finish_one_iter'] = [0]
         ru.set_variables(r, exp_variables)
 
+        if (i+1)%20 ==0:
+            model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
+            HL_replay_buffer.save_buffer(model_save_dir)
+    
     # experiment ends
-    exp_variables['exp_variables'] = 0
+    exp_variables['finish_exp'] = [1]
     ru.set_variables(r, exp_variables)
-    model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
-    HL_replay_buffer.save_buffer(model_save_dir)
+    
 
 
 def main(args):

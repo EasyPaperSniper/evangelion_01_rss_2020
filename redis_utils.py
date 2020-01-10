@@ -28,19 +28,20 @@ def unwarp_state(exp_variables):
 def get_state(r):
     exp_variables = get_variables(r)
     state = unwarp_state(exp_variables)
-    return state
+    return state, exp_variables
 
 def set_state(r, state, exp_variables):
     exp_variables = wrap_state(state, exp_variables)
     set_variables(r, exp_variables)
     return exp_variables
 
-def wait_for_key(r,key):
-    print(' Wait for' + key)
+def wait_for_key(r,key, change = True):
+    print(' Wait for ' + key)
     while True:
         exp_variables = get_variables(r)
         if exp_variables[key][0]:
-            exp_variables[key] = [0]
+            if change:
+                exp_variables[key] = [0]
             set_variables(r, exp_variables)
             print('Finished ' + key)
             return exp_variables

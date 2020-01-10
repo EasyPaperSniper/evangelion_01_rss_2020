@@ -2,6 +2,7 @@
 import os
 import json
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
+import datetime
 
 import numpy as np
 import torch
@@ -40,10 +41,15 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
             target = np.zeros(args.z_dim)
             
             # take current state and plan for next z_action and sent to daisy
+            t_start = datetime.datetime.now()
             if args.test:  
                 latent_action = high_level_planning.plan_latent_action(pre_com_state, target)
             else:
                 latent_action = high_level_planning.sample_latent_action(target)
+            
+            t_end = datetime.datetime.now()
+            # latent_action = np.zeros(args.z_dim)
+            print((t_end - t_start).total_seconds())
             
             exp_variables['z_action'] = latent_action.tolist()
             exp_variables['update_z_action'] = [1]
@@ -60,7 +66,7 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
 
             if utils.check_robot_dead(post_com_state):
                 break
-            print(exp_variables)
+
         
         exp_variables['not_finish_one_iter'] = [0]
         ru.set_variables(r, exp_variables)

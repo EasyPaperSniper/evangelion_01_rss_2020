@@ -4,6 +4,7 @@ import os
 import json
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import time
+import datetime
 
 import numpy as np
 import torch
@@ -24,23 +25,24 @@ def run_LLTG_IK(env, args, r, low_level_TG):
     if args.sim:
         state = motion_library.exp_standing(env)
         low_level_TG.reset(state)
-    
 
-    input(" Press anything to start")
     state = env.calc_state()
     exp_variables = ru.get_variables(r)
+    exp_variables['finish_one_step'] = [1]
     exp_variables = ru.set_state(r,state, exp_variables)
+    input(' Press again to start')
 
-    
+
     while True:
         # update swing/stance leg
         low_level_TG.policy.update_swing_stance()
         
         # do IK 
         for step in range(1, args.num_timestep_per_footstep+1):
+            t_start = datetime.datetime.now()
             # check if footstep update/set a key stuff
             exp_variables = ru.get_variables(r)
-            if exp_variables['updated_z_action'][0]:
+            if exp_variables['update_z_action'][0]:
                 z_action = np.array(exp_variables['z_action'])
                 low_level_TG.policy.update_latent_action_params(state,z_action)
                 exp_variables['update_z_action'] = [0]
@@ -48,14 +50,20 @@ def run_LLTG_IK(env, args, r, low_level_TG):
 
             action = low_level_TG.get_action(state, step)
             # state = env.step(action)
-            time.sleep(0.01)
+            t_end = datetime.datetime.now()
+            t_diff = (t_end - t_start).total_seconds()
+            time.sleep(max(0, 1.0/args.control_frequency - t_diff))
 
 
         # finish one step and update to high level 
         exp_variables['finish_one_step'] = [1]
         ru.set_state(r,state, exp_variables)
         exp_variables = ru.get_variables(r)
-        if not exp_variables['do_one_iter'][0]:
+        print(exp_variables)
+
+        if not exp_variables['not_finish_one_iter'][0]:
+            exp_variables['not_finish_one_iter'][0] = [1]
+            ru.set_state(r,state, exp_variables)
             break
 
 
@@ -80,12 +88,11 @@ def main(args):
             init_state = init_state,
         )
 
-    input('Start client')
 
     while True:
-        print('New Iteration ??')
-        exp_variables = r.get('exp_variables')
-        if not exp_variables['do_exp']:
+        input('New Iteration ??')
+        exp_variables = ru.get_variables(r)
+        if exp_variables['finish_exp'][0]:
             break
         run_LLTG_IK(env, args, r, low_level_TG)
 

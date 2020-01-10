@@ -28,7 +28,7 @@ def run_LLTG_IK(env, args, r, low_level_TG):
 
     input(" Press anything to start")
     state = env.calc_state()
-    exp_variables = get_variables(r)
+    exp_variables = ru.get_variables(r)
     exp_variables = ru.set_state(r,state, exp_variables)
 
     

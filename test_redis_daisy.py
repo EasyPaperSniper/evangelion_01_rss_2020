@@ -85,7 +85,7 @@ def main(args):
     while True:
         print('New Iteration ??')
         exp_variables = r.get('exp_variables')
-        if not key_dict['do_exp']:
+        if not exp_variables['do_exp']:
             break
         run_LLTG_IK(env, args, r, low_level_TG)
 

@@ -19,18 +19,37 @@ import utils
 from logger import Logger
 import redis_utils as ru
 
+SHOULDER = 0.5
+ELBOW = 1.1
 
-def run_LLTG_IK(env, args, r, low_level_TG):
+def run_LLTG_IK(env, args, r):
     # initialize robot
-    if args.sim:
-        state = motion_library.exp_standing(env)
-        low_level_TG.reset(state)
-
+    # a = input('Select way to initialize the robot')
+    # if str(a) == '1': #start from ground
+    #     state = motion_library.demo_standing(env, shoulder = SHOULDER, elbow = ELBOW)
+    # else:
+    #     state = motion_library.hold_position(env, shoulder = SHOULDER, elbow = ELBOW)
+    # print('Robot initialized, press key on client!')
     state = env.calc_state()
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    low_level_TG = LLTG.low_level_TG(
+            device = device,
+            z_dim = args.z_dim,
+            a_dim = args.a_dim,
+            num_timestep_per_footstep = args.num_timestep_per_footstep,
+            batch_size = args.batch_size,
+            low_level_policy_type = args.low_level_policy_type,
+            update_low_level_policy = args.update_low_level_policy,
+            update_low_level_policy_lr = args.update_low_level_policy_lr,
+            init_state = state,
+        )
     exp_variables = ru.get_variables(r)
     exp_variables['finish_one_step'] = [1]
     exp_variables = ru.set_state(r,state, exp_variables)
-    input(' Press again to start')
+    # state = motion_library.hold_position(env, shoulder = SHOULDER, elbow = ELBOW)
+    input('hdjkshfks')
+    print('Start operation!')
 
 
     while True:
@@ -44,6 +63,7 @@ def run_LLTG_IK(env, args, r, low_level_TG):
             exp_variables = ru.get_variables(r)
             if exp_variables['update_z_action'][0]:
                 z_action = np.array(exp_variables['z_action'])
+                print(z_action)
                 low_level_TG.policy.update_latent_action_params(state,z_action)
                 exp_variables['update_z_action'] = [0]
                 ru.set_variables(r, exp_variables)
@@ -52,6 +72,7 @@ def run_LLTG_IK(env, args, r, low_level_TG):
             # state = env.step(action)
             t_end = datetime.datetime.now()
             t_diff = (t_end - t_start).total_seconds()
+            print(t_diff)
             time.sleep(max(0, 1.0/args.control_frequency - t_diff))
 
 
@@ -59,7 +80,7 @@ def run_LLTG_IK(env, args, r, low_level_TG):
         exp_variables['finish_one_step'] = [1]
         ru.set_state(r,state, exp_variables)
         exp_variables = ru.get_variables(r)
-        print(exp_variables)
+
 
         if not exp_variables['not_finish_one_iter'][0]:
             exp_variables['not_finish_one_iter'][0] = [1]
@@ -68,33 +89,18 @@ def run_LLTG_IK(env, args, r, low_level_TG):
 
 
 def main(args):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     r = redis.Redis(host = 'localhost', port=6379, db = 0)
 
     # initialize env
     env = daisy_API(sim=args.sim, realsense = True,render=args.render, logger = False)
     env.set_control_mode(args.control_mode)
-    init_state = env.calc_state()
-
-    low_level_TG = LLTG.low_level_TG(
-            device = device,
-            z_dim = args.z_dim,
-            a_dim = args.a_dim,
-            num_timestep_per_footstep = args.num_timestep_per_footstep,
-            batch_size = args.batch_size,
-            low_level_policy_type = args.low_level_policy_type,
-            update_low_level_policy = args.update_low_level_policy,
-            update_low_level_policy_lr = args.update_low_level_policy_lr,
-            init_state = init_state,
-        )
-
 
     while True:
-        input('New Iteration ??')
+        input('New Iteration! Dont forget to check if the motors strategy are set correctly. Start client if its off')    
         exp_variables = ru.get_variables(r)
         if exp_variables['finish_exp'][0]:
             break
-        run_LLTG_IK(env, args, r, low_level_TG)
+        run_LLTG_IK(env, args, r)
 
 if __name__ == "__main__":
     args = parse_args()

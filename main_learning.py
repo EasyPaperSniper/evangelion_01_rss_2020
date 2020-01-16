@@ -108,10 +108,10 @@ def main(args):
     )
 
     if args.low_level_policy_type =='NN':
-        low_level_TG.load_model('./save_data/trial_2')
+        low_level_TG.load_model('./save_data/trial_1')
 
     # # # collect data
-    # collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
+    collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )

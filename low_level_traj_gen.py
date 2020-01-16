@@ -84,12 +84,12 @@ class NN_tra_generator(nn.Module):
     '''
     The NN trajectory generator(low level controller) is a NN which is trained in a supervised manner
     '''
-    def __init__(self, z_dim, policy_output_dim, policy_hidden_num, device, init_action=np.zeros(18)) :
+    def __init__(self, z_dim, policy_output_dim, policy_hidden_num, device) :
         '''
         Initialize the structure of trajectory generator
         '''
         super().__init__()
-        self.init_action = init_action
+
         self.device = device
         self.trunk = nn.Sequential(
             nn.Linear(1 + z_dim, policy_hidden_num ), nn.ReLU(),
@@ -112,7 +112,7 @@ class NN_tra_generator(nn.Module):
         phase_term = torch.FloatTensor(phase).to(self.device)
         phase_term = phase_term.unsqueeze(0)
         action = self.forward(latent_action, phase_term)
-        return action.cpu().data.numpy().flatten() + self.init_action
+        return action.cpu().data.numpy().flatten() 
 
 class low_level_TG():
     def __init__(self, 
@@ -138,7 +138,7 @@ class low_level_TG():
         if low_level_policy_type == 'IK':
             self.policy = IK_traj_generator(init_state)
         elif low_level_policy_type =='NN':
-            self.policy = NN_tra_generator( z_dim = z_dim, policy_output_dim = a_dim, policy_hidden_num = 32, device = device, init_action = self.init_state['j_pos'])
+            self.policy = NN_tra_generator( z_dim = z_dim, policy_output_dim = a_dim, policy_hidden_num = 32, device = device)
         
         self.update_low_level_policy = update_low_level_policy
         if self.update_low_level_policy:

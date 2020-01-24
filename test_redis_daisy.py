@@ -36,6 +36,7 @@ def run_LLTG_IK(env, args, r):
 
     velocity_stack = [[],[]]
     velocity_record = [[],[]]
+    postion_record = [[],[],[]]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     low_level_TG = LLTG.low_level_TG(
             device = device,
@@ -48,13 +49,7 @@ def run_LLTG_IK(env, args, r):
             update_low_level_policy_lr = args.update_low_level_policy_lr,
             init_state = state,
         )
-    action_limit = np.empty((18,2))
-    for i in range(6):
-        action_limit[3*i][0] = state['j_pos'][3*i]+0.4
-        action_limit[3*i][1] = state['j_pos'][3*i]-0.4
-
-        action_limit[3*i+2][0] = state['j_pos'][3*i+2]+0.3
-        action_limit[3*i+2][1] = state['j_pos'][3*i+2]-0.3
+    des_height = state['base_pos_z'][0]
 
     exp_variables = ru.get_variables(r)
     exp_variables['finish_one_step'] = [1]
@@ -80,14 +75,17 @@ def run_LLTG_IK(env, args, r):
                 ru.set_variables(r, exp_variables)
 
             action = low_level_TG.get_action(state, step)
-            for i in range(6):
-                action[3*i] = np.clip(action[3*i],action_limit[3*i][1],action_limit[3*i][0])
-                action[3*i+2] = np.clip(action[3*i+2],action_limit[3*i+2][1],action_limit[3*i+2][0])
+           
             state = env.step(action)
+            
+
             velocity_stack[0].append(state['base_velocity'][0])
             velocity_stack[1].append(state['base_velocity'][1])
             velocity_record[0].append(state['base_velocity'][0])
             velocity_record[1].append(state['base_velocity'][1])
+            postion_record[0].append((state['base_pos_x'][0]))
+            postion_record[1].append((state['base_pos_y'][0]))
+            postion_record[2].append((state['base_ori_euler'][2]))
             if len(velocity_stack[0])>STACK_LENGTH:
                 velocity_stack[0].pop(0)
                 velocity_stack[1].pop(0)
@@ -108,6 +106,7 @@ def run_LLTG_IK(env, args, r):
         if not exp_variables['not_finish_one_iter'][0]:
             exp_variables['not_finish_one_iter'][0] = [1]
             exp_variables['record_vel'] = velocity_record
+            exp_variables['record_pos'] = postion_record
             ru.set_state(r,state, exp_variables)
             break
 

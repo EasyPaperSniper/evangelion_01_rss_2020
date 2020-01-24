@@ -14,10 +14,6 @@ TRIPOD_LEG_PAIR_2 = [1, 2, 5]
 NUM_LEGS = 6
 EPSILON = 1e-4
 
-# joint_limit = np.empty(18)
-# for i in range(6):
-#     joint_limit[3*i] = 
-
 
 class IK_traj_generator():
     def __init__(self,
@@ -43,6 +39,7 @@ class IK_traj_generator():
         # update swing/stance leg set
         
         self.swing_start_foot_pos = get_foot_position_world_from_com(state)
+
         self.last_com_ori = state['base_ori_euler']
         self.last_des_body_ori[2] = self.last_des_body_ori[2] + self.latent_action[-1] # TODO: pretty annoying, need to change
 
@@ -142,8 +139,8 @@ class low_level_TG():
 
         self.action_limit = np.empty((18,2))
         for p in range(6):
-            self.action_limit[3*p][0] = self.init_state['j_pos'][3*p]+0.5
-            self.action_limit[3*p][1] = self.init_state['j_pos'][3*p]-0.5
+            self.action_limit[3*p][0] = self.init_state['j_pos'][3*p]+0.4
+            self.action_limit[3*p][1] = self.init_state['j_pos'][3*p]-0.4
 
             self.action_limit[3*p+2][0] = self.init_state['j_pos'][3*p+2]+0.3
             self.action_limit[3*p+2][1] = self.init_state['j_pos'][3*p+2]-0.3

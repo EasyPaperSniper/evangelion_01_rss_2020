@@ -15,8 +15,16 @@ from args_all import parse_args
 import utils
 import redis_utils as ru
 from logger import Logger
-from main_learning import train_model
+# from main_learning import train_model
 
+def train_model(args, HL_replay_buffer, high_level_planning ):
+    model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
+    logger = Logger(model_save_dir, name = 'train')
+    # HL_replay_buffer.load_buffer(model_save_dir )
+    high_level_planning.load_mean_var(model_save_dir  + '/buffer_data')
+    
+    high_level_planning.update_model(HL_replay_buffer,logger)
+    high_level_planning.save_data(model_save_dir)  
 
 def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
     exp_variables = {
@@ -26,8 +34,7 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
         'update_z_action': [0],
     }
     ru.set_variables(r, exp_variables)
-
-    for i in range(args.num_iters):
+    for i in range(50,args.num_iters):
         
         ru.wait_for_key(r,'not_finish_one_iter', change= False)
         print('Iteration: ' , i+1)
@@ -35,10 +42,14 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
         ru.wait_for_key(r,'finish_one_step')
         state, exp_variables = ru.get_state(r)
 
-        for _ in range(args.num_latent_action_per_iteration):
+        for k in range(args.num_latent_action_per_iteration):
             pre_com_state = state
-            # target = np.clip(0.3 * np.random.randn(3),-0.4,0.4)
-            target = np.zeros(args.z_dim)
+            
+            q = k % 5
+            if q == 0:
+                target = np.clip(0.2 * np.random.randn(3),-0.25,0.25)
+            if  q==4:
+                target = np.zeros(3)
             
             # take current state and plan for next z_action and sent to daisy
             t_start = datetime.datetime.now()
@@ -46,10 +57,8 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
                 latent_action = high_level_planning.plan_latent_action(pre_com_state, target)
             else:
                 latent_action = high_level_planning.sample_latent_action(target)
-            
+
             t_end = datetime.datetime.now()
-            # latent_action = np.zeros(args.z_dim)
-            print((t_end - t_start).total_seconds())
             
             exp_variables['z_action'] = latent_action.tolist()
             exp_variables['update_z_action'] = [1]
@@ -67,11 +76,10 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
             if utils.check_robot_dead(post_com_state):
                 break
 
-        
         exp_variables['not_finish_one_iter'] = [0]
         ru.set_variables(r, exp_variables)
 
-        if (i+1)%20 ==0:
+        if (i+1)%1 ==0:
             model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
             HL_replay_buffer.save_buffer(model_save_dir)
     
@@ -80,16 +88,16 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
     ru.set_variables(r, exp_variables)
     
 
-
 def main(args):
-    r = redis.Redis(host='10.10.1.2', port=6379, db=0)
+    # r = redis.Redis(host='10.10.1.2', port=6379, db=0)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model_obs_dim, model_output_dim = 4, 6
     # model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
     utils.make_dir(args.save_dir)
     HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device,                 
                 args.num_iters * args.num_latent_action_per_iteration)
-
+    HL_replay_buffer.load_buffer('./save_data/trial_3')
+    HL_replay_buffer.idx = 1960
     high_level_planning = HLPM.high_level_planning(
             device = device,
             model_obs_dim = model_obs_dim,
@@ -106,10 +114,9 @@ def main(args):
             model_update_steps = args.model_update_steps,
             control_frequency = args.control_frequency
         )
+    # collect_data_client(args, r, high_level_planning , HL_replay_buffer)
 
-    collect_data_client(args, r, high_level_planning , HL_replay_buffer)
-
-    # train_model(args, HL_replay_buffer, high_level_planning )
+    train_model(args, HL_replay_buffer, high_level_planning )
    
 
 if __name__ == "__main__":

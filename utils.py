@@ -19,7 +19,7 @@ def make_dir(dir_path):
 
 def normalization(a, mean, std):
     return (a-mean)/std
-
+    
 def inverse_normalization(a, mean, std):
     return a*std + mean
     
@@ -80,6 +80,7 @@ class ReplayBuffer(object):
         np.save(save_dir+'/rewards', self.rewards)
         np.save(save_dir+'/next_obses', self.next_obses)
         np.save(save_dir+'/not_dones', self.not_dones)
+        np.save(save_dir+'/idx',np.array([self.idx]))
 
         # save mean and var
         self.all_mean_var[0]= np.mean(self.obses, axis = 0)
@@ -104,7 +105,8 @@ class ReplayBuffer(object):
         self.rewards = np.load(save_dir+'/rewards.npy')
         self.next_obses = np.load(save_dir+'/next_obses.npy')
         self.not_dones = np.load(save_dir+'/not_dones.npy')
-        self.idx = np.shape(self.obses)[0]
+        self.idx = np.load(save_dir+'/idx.npy')[0]
+
         return self.load_mean_var(save_dir)
         
 
@@ -140,11 +142,15 @@ def HL_delta_obs(pre_com_state,post_com_state):
     high_level_delta_obs.append(math.sin(post_com_state['base_ori_euler'][2]) ) # predict direction 
     high_level_delta_obs.append(math.cos(post_com_state['base_ori_euler'][2]) )
 
-    high_level_delta_obs.append(post_com_state['base_pos_x'][0] - pre_com_state['base_pos_x'][0]) # position changes
-    high_level_delta_obs.append(post_com_state['base_pos_y'][0] - pre_com_state['base_pos_y'][0])
-   
+    delta_x = (post_com_state['base_pos_x'][0] - pre_com_state['base_pos_x'][0])
+    delta_y = (post_com_state['base_pos_y'][0] - pre_com_state['base_pos_y'][0])
+    high_level_delta_obs.append(delta_x) # position changes
+    high_level_delta_obs.append(delta_y)
+    
+
     for vel in post_com_state['base_velocity'][0:2]:# velocity information
         high_level_delta_obs.append(vel)
+
     
     return np.array(high_level_delta_obs)
 
@@ -189,7 +195,7 @@ def run_mpc_without_norm(state, model, target, latent_action_sample, mean_var):
         latent_action_norm = normalization(latent_action,mean_var[2], mean_var[3] )
         predict_delta_state_norm = model.predict(high_level_obs_norm, latent_action_norm)
         predict_delta_state = inverse_normalization(predict_delta_state_norm, mean_var[4], mean_var[5])
-        next_state, high_level_obs = calc_next_state(state, predict_delta_state)
+        state, high_level_obs = calc_next_state(state, predict_delta_state)
         # cost += np.linalg.norm(target[0:2] - next_state[3:]) + np.linalg.norm(target[2] - next_state[0])
 
     # add target position 
@@ -197,8 +203,44 @@ def run_mpc_without_norm(state, model, target, latent_action_sample, mean_var):
     # cost = 4 * np.linalg.norm(target[0:2] - next_state[1:3]) + np.linalg.norm(theta - next_state[0])
 
     # square circle cost
-    cost  =  2*np.linalg.norm(target[0:2] - next_state[1:3]) +  np.linalg.norm(target[2:] - high_level_obs[0:2])
+    cost  =  np.linalg.norm(target[0:2] - state[1:3]) +  np.linalg.norm(target[2:] - high_level_obs[0:2])
+    return  high_level_obs
+
+
+def calc_next_input(predict_delta_state, position_buffer):
+    predict_size = np.shape(predict_delta_state)
+    HL_obs_buffer = np.empty((predict_size[0], predict_size[1]-2))
+    for i in range(predict_size[0]):
+        position_buffer[i] = position_buffer[i] + predict_delta_state[i][2:4]
+        HL_obs_buffer[i][0:2] = predict_delta_state[i][0:2]
+        HL_obs_buffer[i][2:] = predict_delta_state[i][4:]
+    return HL_obs_buffer, position_buffer
+
+
+def calc_cost(cost, predict_delta_state, position_buffer, target,latent_action_sample_all=None):
+    for i in range(np.shape(cost)[0]):
+        cost[i] += (10 * np.linalg.norm(target[0:2] - predict_delta_state[i][4:6]) + 0.0*np.linalg.norm( predict_delta_state[i][0]) + 
+                    0.0*np.std(latent_action_sample_all[i])) - 1*np.linalg.norm(predict_delta_state[i][5:6])
+        # cost[i] =   (4 * np.linalg.norm(target[0:2] - position_buffer[i]) + 1*np.linalg.norm(target[0:2]/10 - predict_delta_state[i][4:6]) 
+        #             + 0*np.linalg.norm(math.atan2(predict_delta_state[i][1],predict_delta_state[i][0])))
+        # cost[i] =   (3 * np.linalg.norm(target[0:2] - position_buffer[i]) + 0*np.linalg.norm(predict_delta_state[i][4:6]) 
+        #             + 1*np.linalg.norm(math.atan2(predict_delta_state[i][1],predict_delta_state[i][0])))
+        # cost[i] =   (3 * np.linalg.norm(target[0:2] - position_buffer[i]) + 0*np.linalg.norm(predict_delta_state[i][4:6]) 
+        #             + 0*np.linalg.norm(math.atan2((target[0:2] - position_buffer[i])[1],(target[0:2] - position_buffer[i])[0])-math.atan2(predict_delta_state[i][1],predict_delta_state[i][0])))
+        # cost[i] = 3 * np.linalg.norm(target[0:2] - position_buffer[i]) + 5*np.linalg.norm(target[2:]- predict_delta_state[i][0:2]) 
     return cost
+
+def run_mpc_calc_cost(HL_obs_buffer, model, target, latent_action_sample, position_buffer, cost, mean_var):
+    latent_action_sample_all = np.swapaxes(latent_action_sample,0,1)
+    for i in range(np.shape(latent_action_sample)[0]):
+        latent_action_norm = normalization(latent_action_sample[i],mean_var[2], mean_var[3] )
+        HL_obs_buffer_norm = normalization(HL_obs_buffer, mean_var[0], mean_var[1])
+        predict_delta_state_norm = model.predict_para(HL_obs_buffer_norm, latent_action_norm)
+        predict_delta_state = inverse_normalization(predict_delta_state_norm,  mean_var[4], mean_var[5])
+        HL_obs_buffer, position_buffer = calc_next_input(predict_delta_state, position_buffer)
+        cost = calc_cost(cost, predict_delta_state, position_buffer, target,latent_action_sample_all)
+    return cost
+
 
 def get_init_r_yaw(init_foot_pos):
     r_yaw = np.zeros((6,2))
@@ -206,3 +248,20 @@ def get_init_r_yaw(init_foot_pos):
         r_yaw[i][0] = np.linalg.norm(init_foot_pos[i][0:2])
         r_yaw[i][1] = math.atan2(init_foot_pos[i][1], init_foot_pos[i][0])
     return r_yaw
+
+
+def filter_data(data, win_len = 100):
+    '''
+        Data: [1,n]
+    '''
+    filtered_data = []
+    print(np.shape(data)[0])
+    for i in range(np.shape(data)[1]):
+        index = max(0,i-100)
+        filtered_data.append(np.mean(data[index:i+1]))
+    return np.array(filtered_data)
+
+
+
+
+

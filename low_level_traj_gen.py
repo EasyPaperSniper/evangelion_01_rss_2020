@@ -44,7 +44,11 @@ class IK_traj_generator():
         self.latent_action = latent_action
         # update swing/stance leg set
         self.swing_start_foot_pos = get_foot_position_world_from_com(state)
+<<<<<<< HEAD
         
+=======
+
+>>>>>>> 64cbb2dc4c9ad048d26f2a767a0715f65f2ce7f6
         self.last_com_ori = state['base_ori_euler']
         self.last_des_body_ori[2] = self.last_des_body_ori[2] + self.latent_action[-1] # TODO: pretty annoying, need to change
 
@@ -225,8 +229,8 @@ class low_level_TG():
 
         self.action_limit = np.empty((18,2))
         for p in range(6):
-            self.action_limit[3*p][0] = self.init_state['j_pos'][3*p]+0.5
-            self.action_limit[3*p][1] = self.init_state['j_pos'][3*p]-0.5
+            self.action_limit[3*p][0] = self.init_state['j_pos'][3*p]+0.4
+            self.action_limit[3*p][1] = self.init_state['j_pos'][3*p]-0.4
 
             self.action_limit[3*p+2][0] = self.init_state['j_pos'][3*p+2]+0.4
             self.action_limit[3*p+2][1] = self.init_state['j_pos'][3*p+2]-0.4

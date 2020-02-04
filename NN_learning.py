@@ -14,8 +14,7 @@ import daisy_hardware.motion_library as motion_library
 from logger import Logger
 from low_level_traj_gen import NN_tra_generator
 
-
-
+# # load trajectory
 
 
 class train_NNTG():
@@ -43,21 +42,12 @@ class train_NNTG():
 
 
     def sample_phase_action(self, primitive_index):
-        idxs = np.random.randint(1, 101, size=self.batch_size)
-        phase = idxs / 100.0
+        idxs = np.random.randint(1,171, size=self.batch_size)
+        phase = idxs / 170.0
         expert_action = np.empty((self.batch_size, 18), dtype=np.float32)
         
         for i in range(self.batch_size):
-            if primitive_index == 0:
-                expert_action[i] = expert_control(i= phase[i],w = 1, phase=1)
-            elif primitive_index == 1:
-                expert_action[i] = expert_control(i= phase[i],w = 1, phase=0.5)
-            elif primitive_index == 2:
-                expert_action[i] = expert_control(i= phase[i],w = 1, phase=1.5)
-            elif primitive_index == 3:
-                expert_action[i] = expert_control(i= phase[i],a = 0.6, w = 1, phase=1)
-            else:
-                expert_action[i] = expert_control_back(i= phase[i],w = 1, phase=1)
+            expert_action[i] = traj[primitive_index][idxs[i]-1]
 
         return torch.as_tensor(np.reshape(phase,(self.batch_size,1)), device= self.device).float(), torch.as_tensor(expert_action, device= self.device).float()
 
@@ -94,99 +84,86 @@ class train_NNTG():
             torch.load('%s/NNTG.pt' % (save_dir)))
 
 
-z_dim = 1
-num_primitive = 5
+
+
+z_dim = 2
+num_primitive = 10
 policy_output_dim = 18
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+traj = np.load('./save_data/expert_trajectory_total.npy')
 tra_learning = train_NNTG( num_primitive = num_primitive, 
             z_dim= z_dim,
             policy_output_dim = policy_output_dim, 
-            policy_hidden_num = 32, 
+            policy_hidden_num = 512, 
             policy_lr = 1e-3, 
-            batch_size = 10,
+            batch_size = 12,
             device = device)
 
+# z_action_all = np.arange(-0.5,0.5,0.1)
+z_action_all = np.random.randn(40,z_dim)
+total_step = 10
+z_action_all = [[ 0.2295,  0.5950],
+        [ 0.1303,  0.0111],
+        [-0.0920,  0.3827],
+        [ 0.2068,  0.1836],
+        [ 0.2663, -0.0928],
+        [ 0.2584,  0.1057],
+        [ 0.2051, -0.3227],
+        [ 0.3041,  0.1780],
+        [ 0.5115,  0.1338],
+        [ 0.0178,  0.1417],
+        [-0.3598, -0.3446],
+        [-0.2903, -0.1586],
+        [-0.3960, -0.3700],
+        [-0.1368, -0.1423],
+        [-0.5574, -0.2970],
+        [-0.3518,  0.2172],
+        [-0.1867, -0.6132],
+        [-0.1863, -0.2268],
+        [ 0.5526, -0.3470],
+        [-0.2774,  0.1772]]
+CoM_traj = np.empty((np.shape(z_action_all)[0], 3, total_step))
+gait_record = np.empty((np.shape(z_action_all)[0], 6, 100))
+tra_learning.load_model(save_dir = './save_data/trial_2')
+env = daisy_API(sim=True, render=False, logger = False)
+env.set_control_mode('position')
+state = env.reset()
 
 
-
-# # train NNTG
-# print('Z_action before optimization', tra_learning.z_action_all)
-# tra_learning.update_model(num_iteration =1000, save_dir = './save_data/trial_2')
-# print('Z_action after optimization', tra_learning.z_action_all)
-# [[-0.1715],
-#         [ 0.0839],
-#         [-0.0490],
-#         [-0.3888],
-#         [ 0.4106]]
-
-
-
-
-# # test NNTG
-# test_num = 5
-# tra_learning.load_model(save_dir = './save_data/trial_2')
-# record_data = np.empty((test_num,100))
-# z_action = np.random.normal(0.0, 0.5, (test_num,1))
-# axis = range(100)
-
-# for i in range(100):
-#     for j in range(test_num):
-#         record_data[j][i] = tra_learning.policy.get_action(z_action[j], np.array([((i+1)%100)/100.0]))[0]
-
-# for i in range(test_num):
-#     plt.plot(axis, record_data[i], label = 'z= %s'%(str(z_action[i])))
-# plt.legend()
-
-# plt.show()
-
-
-
-
-
-# test in simulation 
-# test_length = 1000
-# z = 0.4106
-# tgt_com_tra = np.empty((3,test_length))
-# test_com_tra = np.empty((3, test_length))
-# env = daisy_API(sim=True, render=True, logger = False)
-# env.set_control_mode('position')
-
-# # state = motion_library.exp_standing(env, shoulder=0.3, elbow = 1.3)
-# # init_action = state['j_pos']
-# # for i in range(test_length):
-# #     action = expert_control(i= ((i+1)%50)/50.0 ,w = 1, phase=0.5) + init_action
-# #     state = env.step(action)
-# #     tgt_com_tra[0][i] = state['base_pos_x'][0]
-# #     tgt_com_tra[1][i] = state['base_pos_y'][0]
-# #     tgt_com_tra[2][i] = state['base_ori_euler'][2]
-
-# state = motion_library.exp_standing(env, shoulder=0.3, elbow = 1.3)
-# init_action = state['j_pos']
-# for i in range(test_length):
-#     action = tra_learning.policy.get_action(np.array([z]), np.array([((i+1)%50)/50.0])) + init_action
-#     state = env.step(action)
-#     test_com_tra[0][i] = state['base_pos_x'][0]
-#     test_com_tra[1][i] = state['base_pos_y'][0]
-#     test_com_tra[2][i] = state['base_ori_euler'][2]
-
-# np.save('./save_data/test_tra/expert_tra.npy', tgt_com_tra)
-# np.save('./save_data/test_tra/test_tra.npy', test_com_tra)
-
-# tgt_com_tra = np.load('./save_data/test_tra/expert_tra.npy')
-# test_com_tra = np.load('./save_data/test_tra/test_tra.npy')
-
-# axis = range(np.shape(tgt_com_tra)[1])
+for i in range(np.shape(z_action_all)[0]):
+    state = motion_library.exp_standing(env, shoulder = 0.3, elbow = 1.3)
     
-# plt.rcParams['figure.figsize'] = (8, 10)
-# fig, (ax1,ax2,ax3) = plt.subplots(3,1)
-# ax1.plot(axis, tgt_com_tra[0])
-# ax1.plot(axis, test_com_tra[0])
-# ax1.set_title('X tracking')
-# ax2.plot(axis, tgt_com_tra[1])
-# ax2.plot(axis, test_com_tra[1])
-# ax2.set_title('Y tracking')
-# ax3.plot(axis, tgt_com_tra[2])
-# ax3.plot(axis, test_com_tra[2])
-# ax3.set_title('yaw tracking')
-# plt.show()
+    
+    z_action = np.array(z_action_all[i])
+    tra_learning.policy.z_action = z_action
+    for j in range(total_step):
+        CoM_traj[i][0][j] = state['base_pos_x'][0]
+        CoM_traj[i][1][j] = state['base_pos_y'][0]
+        CoM_traj[i][2][j] = state['base_ori_euler'][2]
+        
+        for k in range(100):
+            action = tra_learning.policy.get_action(state, (k+1)/100.0)
+            state = env.step(action)
+            
+            # if j == 8:
+            #     for q in range(6):
+            #         if state['foot_pos'][q][2]<=-0.005:
+            #             gait_record[i][q][k] = 1
+            #         else:
+            #             gait_record[i][q][k] = 0
+
+
+# np.save('./save_data/trial_2/500_random_gait_record.npy', gait_record)
+
+
+np.save('./save_data/trial_2/CoM_traj.npy', CoM_traj)
+# np.save('./save_data/trial_2/gait_record.npy', gait_record)
+
+
+# traj = np.load('./save_data/trajectories_gaits.npz')
+# traj_1 = traj['traj_good']
+# for i in [11,2,13,5,14,7,4,8,9,]:
+#     input(str(i)+ ' iteration')
+#     state = motion_library.exp_standing(env, shoulder=0.3, elbow = 1.3)
+#     for j in range(400):
+#         env.step(traj_1[i][j])

@@ -62,24 +62,33 @@ def evaluate_model(args):
         update_low_level_policy_lr = args.update_low_level_policy_lr,
         init_state = init_state,
     )
+    action_limit = np.empty((18,2))
+    for i in range(6):
+        action_limit[3*i][0] = init_state['j_pos'][3*i]+0.5
+        action_limit[3*i][1] = init_state['j_pos'][3*i]-0.5
+
+        action_limit[3*i+2][0] = init_state['j_pos'][3*i+2]+0.3
+        action_limit[3*i+2][1] = init_state['j_pos'][3*i+2]-0.3
+
     if args.low_level_policy_type =='NN':
         low_level_TG.load_model('./save_data/trial_2')
 
-    position_tracking = [[], [], []]
+    
 
     square_circle_test = []
-    # Circle Target
-    for i in range(1,32):
-        target_theta = math.pi* 2 / 32 * i
-        square_circle_test.append(np.array([ 4 - 4 * math.cos(target_theta), 4 * math.sin(target_theta) ,0, 0]))
-    #Square target
-    square_circle_test.append(np.array([-4.0, 4.0, 0, 1]))
-    square_circle_test.append(np.array([-8.0, -0.0, 0, 1]))
-    square_circle_test.append(np.array([-4.0, -4.0, 0, 1]))
-    square_circle_test.append(np.array([-0.0, -0.0, 0, 1]))
+    total_num = 6
+    for i in range(1, total_num+1):
+        theta = i *  math.pi / float(total_num)
+        square_circle_test.append(np.array([1-math.cos(theta), 1.5*math.sin(theta), 0,1]))
 
+    for i in range(1, total_num+1):
+        theta = i *  math.pi / float(total_num)
+        square_circle_test.append(np.array([3-math.cos(theta), -1.5*math.sin(theta), 0,1]))
+
+    square_cost = []
 
     for iter in range(args.num_iters):
+        position_tracking = [[], [], []]
         # reset robot to stand 
         if args.sim: 
             state = motion_library.exp_standing(env)
@@ -89,6 +98,7 @@ def evaluate_model(args):
             position_tracking[2].append(state['base_ori_euler'][2])
         
         j = 0
+        total_cost = 0
         target_index = 0
         while True:
             target =  square_circle_test[target_index]
@@ -100,8 +110,15 @@ def evaluate_model(args):
             for step in range(1, args.num_timestep_per_footstep+1):
                 action = low_level_TG.get_action(state, step)
                 state, total_timestep = env.step(action), total_timestep + 1
+                # collect data
+                position_tracking[0].append(state['base_pos_x'][0])
+                position_tracking[1].append(state['base_pos_y'][0])
+                position_tracking[2].append(state['base_ori_euler'][2])
 
             post_com_state = state
+
+            cost = utils.easy_cost(target,pre_com_state, post_com_state)
+            total_cost += cost
             
 
             # Check if robot still alive
@@ -109,28 +126,27 @@ def evaluate_model(args):
                 high_level_obs , high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
                 predict_state = high_level_planning.model_predict(high_level_obs, latent_action)
 
-            # collect data
-            position_tracking[0].append(state['base_pos_x'][0])
-            position_tracking[1].append(state['base_pos_y'][0])
-            position_tracking[2].append(state['base_ori_euler'][2])
+            
             
             total_latent_action += 1
             j+=1
 
-            if utils.check_robot_dead(state):
-                break
             
             if np.linalg.norm(target[0:2] - np.array([state['base_pos_x'][0], state['base_pos_y'][0]]))  < 0.1 :
                 print("Reach Goal %s!!!!" %str(target_index))
                 target_index +=1
                 if target_index == np.shape(square_circle_test)[0]:
+                    np.save(save_dir + '/square_circle_test_'+str(iter) +'.npy', np.array(position_tracking) )
+                    square_cost.append(total_cost)
+                    print(square_cost)
+                    np.save(save_dir + '/square_circle_cost_'+str(iter) +'.npy', np.array(square_cost) )
+
                     break
 
-            if j>500:
+            if j>1000:
                 print('Did not reach goal')
                 break
 
-    np.save(save_dir + '/square_circle_test.npy', np.array(position_tracking) )
     return 
 
 if __name__ == "__main__":

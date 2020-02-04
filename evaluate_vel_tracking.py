@@ -2,6 +2,7 @@ import os
 import json
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
+
 import numpy as np
 import torch
 
@@ -65,31 +66,43 @@ def evaluate_model(args):
         low_level_TG.load_model('./save_data/trial_2')
 
     prediction_evaluation = np.empty((2* model_output_dim,args.num_latent_action_per_iteration ))
-    velocity_tracking = np.empty((6,args.num_latent_action_per_iteration))
+    velocity_tracking = np.empty((args.num_iters,6,args.num_latent_action_per_iteration))
 
     
-    target_velocity_test = [np.array([0.0, 0.1, 0.0]),
-                            np.array([0.05, 0.15, 0.0]),
-                            np.array([0.05, 0.20, 0.0]),
-                            np.array([-0.05, 0.0, 0.0]),
-                            np.array([0.0, -0.1, 0.0]),
-                            np.array([0.0, -0.2, 0.0]),                   
-                            np.array([-0.05, -0.15, 0.0]),
-                            np.array([-0.1, -0.1, 0.0]),
-                            np.array([-0.0, 0.05, 0.0]),
-                            np.array([0.05, 0.15, 0.0]),]
+    target_velocity_test = [np.array([0.0, 0.15, 0.0,1]),
+                        np.array([0.0, 0.15, 0.0,1]),
+                        np.array([-0.0, 0.15, 0.0,1]),
+                        np.array([-0.15, 0.0,0.0,1]),
+                        np.array([-0.15, 0.0, 0.0,1]),
+                        np.array([-0.15, 0.0,0.0,1]),
+                        np.array([0.0, -0.15,0.0,1]),                   
+                        np.array([0.0, -0.15,0.0,1]),
+                        np.array([0.00, -0.15, 0.0,1]),
+                        np.array([0.0, -0.15, 0.0,1]),
+                        np.array([0.15, -0.0, 0.0,1]),
+                        np.array([0.15, -0.0, 0.0,1]),
+                        np.array([0.15, -0.0, 0.0,1]),
+                        np.array([0.15, -0.0, 0.0,1]),
+                        np.array([0.15, -0.0,0.0,1]),]
 
-
+    total_cost = []
+    
+    velocity_tracking = np.empty((args.num_iters, 6,args.num_latent_action_per_iteration))
     for iter in range(args.num_iters):
+        prediction_evaluation = np.empty((2* model_output_dim,args.num_latent_action_per_iteration ))
+        
+        total_cost = 0
         # reset robot to stand 
-        if args.sim: 
-            state = motion_library.exp_standing(env)
-            low_level_TG.reset(state)
+        
+        if args.low_level_policy_type =='NN':
+            init_state = motion_library.exp_standing(env, shoulder = 0.3, elbow = 1.3)
+        else:
+            init_state = motion_library.exp_standing(env)
 
 
         for j in range(args.num_latent_action_per_iteration):
             if not j%5:
-                target = target_velocity_test[int((j+1)/5)]
+                target = target_velocity_test[int((j+1)/5)]/1.5*2
 
 
             pre_com_state = state
@@ -110,12 +123,12 @@ def evaluate_model(args):
 
             # collect data
 
-            velocity_tracking[0][j] = target[0]
-            velocity_tracking[1][j] = target[1]
-            velocity_tracking[2][j] = predict_state[4]
-            velocity_tracking[3][j] = predict_state[5]
-            velocity_tracking[4][j] = high_level_delta_obs[4]
-            velocity_tracking[5][j] = high_level_delta_obs[5]
+            velocity_tracking[iter][0][j] = target[0]
+            velocity_tracking[iter][1][j] = target[1]
+            velocity_tracking[iter][2][j] = predict_state[4]
+            velocity_tracking[iter][3][j] = predict_state[5]
+            velocity_tracking[iter][4][j] = high_level_delta_obs[4]
+            velocity_tracking[iter][5][j] = high_level_delta_obs[5]
             for q in range(model_output_dim):
                 prediction_evaluation[q][j] = high_level_delta_obs[q]
                 prediction_evaluation[q+model_output_dim][j] = predict_state[q]
@@ -125,8 +138,8 @@ def evaluate_model(args):
             if utils.check_robot_dead(state):
                 break
             
-    np.save(save_dir + '/prediction_evaluation.npy', np.array(prediction_evaluation)) 
-    np.save(save_dir + '/velocity_tracking.npy', velocity_tracking) 
+      
+    np.save(save_dir + '/' + args.high_level_policy_type + '_velocity_tracking_fin.npy', velocity_tracking) 
 
     return 
 

@@ -18,15 +18,19 @@ from logger import Logger
 def collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer):
     for iter in range(args.num_iters):
         if args.sim:
-            state = motion_library.exp_standing(env)
+            if args.low_level_policy_type=='NN':
+                state = motion_library.exp_standing(env, shoulder = 0.3, elbow = 1.3)
+            else:
+                state = motion_library.exp_standing(env)
             low_level_TG.reset(state)
         
-        for _ in range(args.num_latent_action_per_iteration):
+        for j in range(args.num_latent_action_per_iteration):
             target_speed = np.clip(0.3 * np.random.randn(3),-0.4,0.4)
             # generate foot footstep position. If test, the footstep comes from optimization process
             pre_com_state = state
 
-            latent_action = high_level_planning.sample_latent_action(target_speed)
+            if j%2==0:
+                latent_action = high_level_planning.sample_latent_action(target_speed)
 
             low_level_TG.update_latent_action(state,latent_action)
         
@@ -63,7 +67,7 @@ def main(args):
     # define env & high level planning part & low level trajectory generator & replay buffer for HLP
     # initialize logger
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    env = daisy_API(sim=args.sim, render=args.render, logger = False)
+    env = daisy_API(sim=args.sim, render=False, logger = False)
     env.set_control_mode(args.control_mode)
     state = env.reset()
     utils.make_dir(args.save_dir)
@@ -108,10 +112,10 @@ def main(args):
     )
 
     if args.low_level_policy_type =='NN':
-        low_level_TG.load_model('./save_data/trial_1')
+        low_level_TG.load_model('./save_data/trial_2')
 
     # # # collect data
-    collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
+    # collect_data(args,env,high_level_planning,low_level_TG, HL_replay_buffer)
 
     # train model
     train_model(args, HL_replay_buffer, high_level_planning )

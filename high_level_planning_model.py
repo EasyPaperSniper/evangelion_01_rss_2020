@@ -4,6 +4,7 @@
 
 import math
 import multiprocessing as mp
+import datetime
 
 import numpy as np
 import torch
@@ -15,6 +16,8 @@ import utils
 NUM_LEGS = 6
 TRIPOD_LEG_PAIR_1 = [0, 3, 4]
 TRIPOD_LEG_PAIR_2 = [1, 2, 5]
+TRIPOD_LEG_PAIR_1 = [0, 1, 4, 5]
+TRIPOD_LEG_PAIR_2 = [ 2, 3]
 class forward_model(nn.Module):
     '''
     The forward model(mid-level policy) is a NN which is trained in a supervised manner
@@ -43,6 +46,12 @@ class forward_model(nn.Module):
         prediction = self.forward(model_obs, latent_action)
         return prediction.cpu().data.numpy().flatten()
 
+    def predict_para(self, model_obs, latent_action):
+        model_obs = torch.as_tensor(model_obs, device = self.device).float()
+        latent_action = torch.as_tensor(latent_action, device = self.device).float()
+        prediction = self.forward(model_obs, latent_action)
+        return prediction.cpu().data.numpy()
+
 
 # class curiosity_policy():
 #     def __init__(self):
@@ -69,12 +78,12 @@ class raibert_footstep_policy():
     def plan_latent_action(self,state, target_speed=None):
         latent_action = np.zeros(3)
         current_speed = state['base_velocity'][0:2]
-        if target_speed.any():
-            self.target_speed = target_speed
+        # if target_speed.any():
+        self.target_speed = target_speed
         
         speed_term = self.stance_duration/(2*self.control_frequency) * self.target_speed[0:2] #current_speed
         acceleration_term = self.speed_gain *(current_speed - self.target_speed[0:2])
-        orientation_speed_term = self.stance_duration/(self.control_frequency) * self.target_speed[2]
+        orientation_speed_term = -self.stance_duration/(self.control_frequency)*  self.target_speed[2] # state['base_ori_euler'][2]#
 
         # X = T/2 * x_dot + k_p (x_dot - x_dot_des)
         des_footstep = (speed_term + acceleration_term)
@@ -112,7 +121,7 @@ class random_policy():
 
     def sample_latent_action(self, target_speed = None):
         if self.low_level_policy_type =='NN':
-            action = 0.2 * np.random.randn(self.z_dim)
+            action = 0.8 * np.clip(0.4*np.random.randn(self.z_dim),-1,1)
             return action
 
         if not np.shape(target_speed):
@@ -127,10 +136,11 @@ class random_policy():
             latent_action = np.clip(np.random.randn(self.z_dim), -1,1) * 0.02
             latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
             latent_action[2] = target_speed[2] * T + latent_action[2]
-            action = latent_action + np.clip(np.random.randn(self.z_dim) , -2, 2) * 0.05
+            # latent_action = latent_action + target_speed
+            action = latent_action + np.clip(np.random.randn(self.z_dim) , -2, 2) * 0.00
         return action
     
-    def plan_latent_action(self, target_speed):
+    def plan_latent_action(self, state):
         '''
         Sample action based on the reward function
         input:
@@ -141,8 +151,8 @@ class random_policy():
         if self.low_level_policy_type =='NN':
             return self.sample_latent_action()
         
-        latent_action = np.clip(np.random.randn(3), -2,2) * 0.1 #+ target_speed * 0.05
-        latent_action[2] = np.random.randn(1)[0] * 0.02
+        latent_action = np.clip(np.random.randn(self.z_dim), -2,2) * 0.1 #+ target_speed * 0.05
+        latent_action[2] = -state['base_ori_euler'][2]
         return latent_action
 
 class high_level_planning():
@@ -216,13 +226,16 @@ class high_level_planning():
         for _ in range(self.model_update_steps):
             self.update_step += 1
 
-            idxs = np.random.randint(
-                0, HL_replay_buffer.capacity if HL_replay_buffer.full else HL_replay_buffer.idx, size=self.batch_size)
+            # idxs = np.random.randint(
+            #     0, HL_replay_buffer.capacity , size=self.batch_size)
+            idxs = np.random.randint(0, 1100, size=self.batch_size)
+
 
             state = torch.as_tensor(utils.normalization(HL_replay_buffer.obses[idxs], self.all_mean_var[0], self.all_mean_var[1]), device=self.device).float()
             action = torch.as_tensor(utils.normalization(HL_replay_buffer.actions[idxs], self.all_mean_var[2], self.all_mean_var[3]), device=self.device).float()
             delta_state = torch.as_tensor(
                 utils.normalization(HL_replay_buffer.next_obses[idxs], self.all_mean_var[4], self.all_mean_var[5]), device=self.device).float()
+
 
             pred_delta_state = self.forward_model(state,action)
             model_loss = F.mse_loss(pred_delta_state, delta_state)
@@ -254,7 +267,7 @@ class high_level_planning():
         if self.update_sample_policy:
             self.policy.update_policy()
 
-    def plan_latent_action(self,state, target_speed = None, sample_num = 1000, horizon = 1):
+    def plan_latent_action_old(self,state, target_speed = None, sample_num = 1, horizon = 1):
         if self.high_level_policy_type =='raibert':
             self.policy.target_speed = target_speed
             return self.policy.plan_latent_action(state,target_speed )
@@ -274,6 +287,33 @@ class high_level_planning():
             # return best reward index and select action
             sqe_index = cost.index(min(cost))
             latent_action = latent_action_buffer[sqe_index][0]
+            return latent_action
+
+
+    def plan_latent_action(self,state, target_speed = None, sample_num = 1500, horizon = 2):
+        if self.high_level_policy_type =='raibert':
+            self.policy.target_speed = target_speed
+            return self.policy.plan_latent_action(state,target_speed )
+        
+        if self.high_level_policy_type == 'random':
+            # sample bunch of actions and plan for single step
+            latent_action_buffer = np.empty([horizon, sample_num, self.z_dim])
+            HL_obs_buffer = np.empty([sample_num, self.model_obs_dim])
+            position_buffer = np.empty([sample_num, 2])
+            cost = np.zeros(sample_num)
+            HL_obs = utils.HL_obs(state)
+
+            for sample_index in range(sample_num):
+                HL_obs_buffer[sample_index] = HL_obs
+                position_buffer[sample_index]= np.array([state['base_pos_x'][0], state['base_pos_y'][0]])
+                for horizon_index in range(horizon):
+                    latent_action_buffer[horizon_index][sample_index] = self.policy.plan_latent_action(state)
+            
+            cost = utils.run_mpc_calc_cost(HL_obs_buffer, self.forward_model, target_speed, latent_action_buffer, position_buffer, cost, self.all_mean_var).tolist()
+
+            # return best reward index and select action
+            sqe_index = cost.index(min(cost))
+            latent_action = latent_action_buffer[0][sqe_index]
             return latent_action
     
     

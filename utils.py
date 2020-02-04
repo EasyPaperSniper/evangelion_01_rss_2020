@@ -83,12 +83,12 @@ class ReplayBuffer(object):
         np.save(save_dir+'/idx',np.array([self.idx]))
 
         # save mean and var
-        self.all_mean_var[0]= np.mean(self.obses, axis = 0)
-        self.all_mean_var[1]= np.std(self.obses, axis = 0)
-        self.all_mean_var[2]= np.mean(self.actions, axis = 0)
-        self.all_mean_var[3]= np.std(self.actions, axis = 0)
-        self.all_mean_var[4]= np.mean(self.next_obses, axis = 0)
-        self.all_mean_var[5]= np.std(self.next_obses, axis = 0)
+        self.all_mean_var[0]= np.mean(self.obses[0:self.idx], axis = 0)
+        self.all_mean_var[1]= np.std(self.obses[0:self.idx], axis = 0)
+        self.all_mean_var[2]= np.mean(self.actions[0:self.idx], axis = 0)
+        self.all_mean_var[3]= np.std(self.actions[0:self.idx], axis = 0)
+        self.all_mean_var[4]= np.mean(self.next_obses[0:self.idx], axis = 0)
+        self.all_mean_var[5]= np.std(self.next_obses[0:self.idx], axis = 0)
         np.save(save_dir+'/all_mean_var', self.all_mean_var)
 
     def load_mean_var(self,save_dir):
@@ -173,7 +173,7 @@ def check_data_useful(state):
 
 def calc_next_state(state,predict_delta_state):
     next_state = np.zeros(np.shape(predict_delta_state)[0]-1)
-    next_state[0] = math.atan2(predict_delta_state[1], predict_delta_state[0])
+    next_state[0] = math.atan2(predict_delta_state[0], predict_delta_state[1])
     next_state[1] = predict_delta_state[2] + state['base_pos_x'][0]
     next_state[2] = predict_delta_state[3] + state['base_pos_y'][0]
     next_state[3:] =  np.copy(predict_delta_state[4:])
@@ -186,27 +186,6 @@ def calc_next_state(state,predict_delta_state):
     return next_state, np.array(high_level_obs)
 
 
-#TODO: fix bug here
-def run_mpc_without_norm(state, model, target, latent_action_sample, mean_var):
-    high_level_obs = HL_obs(state)
-    cost = 0
-    for latent_action in latent_action_sample:        
-        high_level_obs_norm = normalization(high_level_obs, mean_var[0], mean_var[1])
-        latent_action_norm = normalization(latent_action,mean_var[2], mean_var[3] )
-        predict_delta_state_norm = model.predict(high_level_obs_norm, latent_action_norm)
-        predict_delta_state = inverse_normalization(predict_delta_state_norm, mean_var[4], mean_var[5])
-        state, high_level_obs = calc_next_state(state, predict_delta_state)
-        # cost += np.linalg.norm(target[0:2] - next_state[3:]) + np.linalg.norm(target[2] - next_state[0])
-
-    # add target position 
-    # theta =  0 
-    # cost = 4 * np.linalg.norm(target[0:2] - next_state[1:3]) + np.linalg.norm(theta - next_state[0])
-
-    # square circle cost
-    cost  =  np.linalg.norm(target[0:2] - state[1:3]) +  np.linalg.norm(target[2:] - high_level_obs[0:2])
-    return  high_level_obs
-
-
 def calc_next_input(predict_delta_state, position_buffer):
     predict_size = np.shape(predict_delta_state)
     HL_obs_buffer = np.empty((predict_size[0], predict_size[1]-2))
@@ -217,28 +196,32 @@ def calc_next_input(predict_delta_state, position_buffer):
     return HL_obs_buffer, position_buffer
 
 
-def calc_cost(cost, predict_delta_state, position_buffer, target,latent_action_sample_all=None):
+def calc_cost(cost, predict_delta_state, position_buffer, target,latent_action_sample_all, last_velocity):
     for i in range(np.shape(cost)[0]):
-        cost[i] += (10 * np.linalg.norm(target[0:2] - predict_delta_state[i][4:6]) + 0.0*np.linalg.norm( predict_delta_state[i][0]) + 
-                    0.0*np.std(latent_action_sample_all[i])) - 1*np.linalg.norm(predict_delta_state[i][5:6])
+        # cost[i] += (10 * np.linalg.norm(target[0:2] - predict_delta_state[i][4:6]) + 0.0*np.linalg.norm( predict_delta_state[i][0]) + 
+        #             0.0*np.std(latent_action_sample_all[i])) + 2*np.linalg.norm(target[2:]- predict_delta_state[i][0:2])
         # cost[i] =   (4 * np.linalg.norm(target[0:2] - position_buffer[i]) + 1*np.linalg.norm(target[0:2]/10 - predict_delta_state[i][4:6]) 
         #             + 0*np.linalg.norm(math.atan2(predict_delta_state[i][1],predict_delta_state[i][0])))
         # cost[i] =   (3 * np.linalg.norm(target[0:2] - position_buffer[i]) + 0*np.linalg.norm(predict_delta_state[i][4:6]) 
         #             + 1*np.linalg.norm(math.atan2(predict_delta_state[i][1],predict_delta_state[i][0])))
         # cost[i] =   (3 * np.linalg.norm(target[0:2] - position_buffer[i]) + 0*np.linalg.norm(predict_delta_state[i][4:6]) 
         #             + 0*np.linalg.norm(math.atan2((target[0:2] - position_buffer[i])[1],(target[0:2] - position_buffer[i])[0])-math.atan2(predict_delta_state[i][1],predict_delta_state[i][0])))
-        # cost[i] = 3 * np.linalg.norm(target[0:2] - position_buffer[i]) + 5*np.linalg.norm(target[2:]- predict_delta_state[i][0:2]) 
+        # cost[i] += 0.1*np.std(latent_action_sample_all[i])
+        # cost[i] = 1 * np.linalg.norm(target[0:2] - position_buffer[i]) + 1*np.linalg.norm(target[2:]- predict_delta_state[i][0:2]) 
+        cost[i] += 2*np.linalg.norm(target[0:2] - predict_delta_state[i][4:6]) + 0*np.linalg.norm(predict_delta_state[i][4:6]- last_velocity)
     return cost
 
 def run_mpc_calc_cost(HL_obs_buffer, model, target, latent_action_sample, position_buffer, cost, mean_var):
     latent_action_sample_all = np.swapaxes(latent_action_sample,0,1)
+    last_velocity = HL_obs_buffer[0][2:4]
     for i in range(np.shape(latent_action_sample)[0]):
+        
         latent_action_norm = normalization(latent_action_sample[i],mean_var[2], mean_var[3] )
         HL_obs_buffer_norm = normalization(HL_obs_buffer, mean_var[0], mean_var[1])
         predict_delta_state_norm = model.predict_para(HL_obs_buffer_norm, latent_action_norm)
         predict_delta_state = inverse_normalization(predict_delta_state_norm,  mean_var[4], mean_var[5])
         HL_obs_buffer, position_buffer = calc_next_input(predict_delta_state, position_buffer)
-        cost = calc_cost(cost, predict_delta_state, position_buffer, target,latent_action_sample_all)
+        cost = calc_cost(cost, predict_delta_state, position_buffer, target,latent_action_sample_all, last_velocity)
     return cost
 
 
@@ -261,6 +244,12 @@ def filter_data(data, win_len = 100):
         filtered_data.append(np.mean(data[index:i+1]))
     return np.array(filtered_data)
 
+
+def easy_cost(target,pre_com_state, post_com_state):
+    cost = 2*np.linalg.norm(target[0:2] - post_com_state['base_velocity'][0:2]) + 0*np.linalg.norm(pre_com_state['base_velocity'][0:2] - post_com_state['base_velocity'][0:2])
+    # cost = (1 * np.linalg.norm(target[0:2] - np.array(post_com_state['base_pos_x'][0], post_com_state['base_pos_y'][0])) + 
+    #             0.2*np.linalg.norm(target[2:]- np.array([math.sin(post_com_state['base_ori_euler'][2]), math.cos(post_com_state['base_ori_euler'][2])] )))
+    return cost
 
 
 

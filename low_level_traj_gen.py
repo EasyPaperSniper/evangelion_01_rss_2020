@@ -11,18 +11,20 @@ import utils
 
 TRIPOD_LEG_PAIR_1 = [0, 3, 4]
 TRIPOD_LEG_PAIR_2 = [1, 2, 5]
+
+
+# TRIPOD_LEG_PAIR_1 = [0, 1, 4, 5]
+# TRIPOD_LEG_PAIR_2 = [ 2, 3]
+# TRIPOD_LEG_PAIR_1 = [0, 1, 2,3]
+# TRIPOD_LEG_PAIR_2 = [ 4,5]
 NUM_LEGS = 6
 EPSILON = 1e-4
-
-# joint_limit = np.empty(18)
-# for i in range(6):
-#     joint_limit[3*i] = 
 
 
 class IK_traj_generator():
     def __init__(self,
         init_state,
-        leg_clearance = 0.2,
+        leg_clearance = 0.1,
             ):
         self.leg_clearance = leg_clearance
         self.swing_set = TRIPOD_LEG_PAIR_1 
@@ -41,8 +43,8 @@ class IK_traj_generator():
         # update latent action
         self.latent_action = latent_action
         # update swing/stance leg set
-        
         self.swing_start_foot_pos = get_foot_position_world_from_com(state)
+        
         self.last_com_ori = state['base_ori_euler']
         self.last_des_body_ori[2] = self.last_des_body_ori[2] + self.latent_action[-1] # TODO: pretty annoying, need to change
 
@@ -56,6 +58,8 @@ class IK_traj_generator():
                 angle = self.last_com_ori[2] + self.init_r_yaw[i][1]
                 self.target_delta_xy[i][0] = self.init_r_yaw[i][0] * math.cos(angle) - self.latent_action[0] - self.swing_start_foot_pos[i][0]
                 self.target_delta_xy[i][1] = self.init_r_yaw[i][0] * math.sin(angle) - self.latent_action[1] - self.swing_start_foot_pos[i][1]
+
+        
 
 
     def update_latent_action(self,state,latent_action):
@@ -81,10 +85,89 @@ class IK_traj_generator():
 
         self.des_foot_position_world = np.array(des_foot_pos)             
         self.des_foot_position_com = daisy_kinematics.Foot2World(self.des_foot_position_world,self.des_body_ori)
+        self.des_foot_position_com_swing = daisy_kinematics.Foot2World(self.des_foot_position_world,np.array(state['base_ori_euler']))
+        # for i in self.swing_set:
+        #     self.des_foot_position_com[i] = self.des_foot_position_com_swing[i]
         des_leg_pose = daisy_kinematics.IK_foot2CoM(self.des_foot_position_com)
         
         return  des_leg_pose 
-    
+
+
+
+###########################################################################################################
+class IK_CoM_traj_generator():
+    def __init__(self,
+        init_state,
+        leg_clearance = 0.2,
+            ):
+        self.leg_clearance = leg_clearance
+        self.swing_set = TRIPOD_LEG_PAIR_1 
+        self.stance_set = TRIPOD_LEG_PAIR_2
+        self.init_foot_pos =  get_foot_position_world_from_com(init_state)
+        self.standing_height = - self.init_foot_pos[0][2]
+        self.last_des_body_ori = np.array([0,0,init_state['base_ori_euler'][2]])
+        self.des_body_ori = np.array([0,0,init_state['base_ori_euler'][2]])
+
+        self.init_r_yaw = utils.get_init_r_yaw(self.init_foot_pos)
+
+    def update_swing_stance(self):
+        self.swing_set, self.stance_set = np.copy(self.stance_set), np.copy(self.swing_set)
+
+    def update_latent_action_params(self,state,latent_action):
+        # transform latent action to world frame 
+         # update latent action
+        self.latent_action = latent_action
+        # update
+        self.swing_start_foot_pos = daisy_kinematics.FK_CoM2Foot(state['j_pos'])
+        self.swing_start_foot_pos_world = get_foot_position_world_from_com(state)
+
+        self.last_com_ori = state['base_ori_euler']
+        self.last_des_body_ori[2] = self.last_com_ori[2]  + self.latent_action[-1] # TODO: pretty annoying, need to change
+
+        self.target_delta_xy = np.zeros((NUM_LEGS, 3))
+        for i in range(NUM_LEGS):
+            if i in self.swing_set:
+                angle = self.latent_action[-1]  + self.init_r_yaw[i][1]
+                self.target_delta_xy[i][0] = self.init_r_yaw[i][0] * math.cos(angle) + self.latent_action[0] - self.swing_start_foot_pos[i][0]                              
+                self.target_delta_xy[i][1] = self.init_r_yaw[i][0] * math.sin(angle) + self.latent_action[1] - self.swing_start_foot_pos[i][1]                                                            
+            else:
+                angle =  self.init_r_yaw[i][1]
+                self.target_delta_xy[i][0] = self.init_r_yaw[i][0] * math.cos(angle) - self.latent_action[0] - self.swing_start_foot_pos[i][0]
+                self.target_delta_xy[i][1] = self.init_r_yaw[i][0] * math.sin(angle) - self.latent_action[1] - self.swing_start_foot_pos[i][1]
+            self.target_delta_xy[i][2] = -self.standing_height
+        # transform target x y to the 0 yaw frame
+        self.target_delta_xyz_world = daisy_kinematics.World2Foot(self.target_delta_xy, np.array(self.last_com_ori))
+
+
+    def update_latent_action(self,state,latent_action):
+        self.update_swing_stance()
+        self.update_latent_action_params(state,latent_action)
+
+    def get_action(self, state, phase):
+        des_foot_pos = []
+        self.des_body_ori[2] = (self.last_des_body_ori[2] - self.last_com_ori[2]) * phase + self.last_com_ori[2]
+        # this seems to be designed only when walking on a flat ground 
+        des_foot_height = (self.leg_clearance * math.sin(math.pi * phase + EPSILON) - self.standing_height)
+
+        for i in range(NUM_LEGS): 
+            des_single_foot_pos = np.zeros(3)
+            if i in self.swing_set:
+                des_single_foot_pos[2] = des_foot_height                                                      
+            else:
+                des_single_foot_pos[2] = - self.standing_height 
+
+            des_single_foot_pos[0] =  self.target_delta_xyz_world[i][0] * phase + self.swing_start_foot_pos_world[i][0]
+            des_single_foot_pos[1] =  self.target_delta_xyz_world[i][1] * phase + self.swing_start_foot_pos_world[i][1] 
+            des_foot_pos.append(des_single_foot_pos)
+
+        self.des_foot_position_world = np.array(des_foot_pos)             
+        self.des_foot_position_com = daisy_kinematics.Foot2World(self.des_foot_position_world,self.des_body_ori)
+
+        des_leg_pose = daisy_kinematics.IK_foot2CoM(self.des_foot_position_com)
+        
+        return  des_leg_pose 
+
+#################################################################################################################################
 class NN_tra_generator(nn.Module):
     '''
     The NN trajectory generator(low level controller) is a NN which is trained in a supervised manner
@@ -145,13 +228,13 @@ class low_level_TG():
             self.action_limit[3*p][0] = self.init_state['j_pos'][3*p]+0.5
             self.action_limit[3*p][1] = self.init_state['j_pos'][3*p]-0.5
 
-            self.action_limit[3*p+2][0] = self.init_state['j_pos'][3*p+2]+0.3
-            self.action_limit[3*p+2][1] = self.init_state['j_pos'][3*p+2]-0.3
+            self.action_limit[3*p+2][0] = self.init_state['j_pos'][3*p+2]+0.4
+            self.action_limit[3*p+2][1] = self.init_state['j_pos'][3*p+2]-0.4
 
         if low_level_policy_type == 'IK':
-            self.policy = IK_traj_generator(init_state)
+            self.policy = IK_CoM_traj_generator(init_state)
         elif low_level_policy_type =='NN':
-            self.policy = NN_tra_generator( z_dim = z_dim, policy_output_dim = a_dim, policy_hidden_num = 32, device = device)
+            self.policy = NN_tra_generator( z_dim = z_dim, policy_output_dim = a_dim, policy_hidden_num = 512, device = device)
         
         self.update_low_level_policy = update_low_level_policy
         if self.update_low_level_policy:
@@ -183,6 +266,6 @@ class low_level_TG():
     def load_model(self, save_dir):
         if self.low_level_policy_type =='NN':
             self.policy.load_state_dict(
-                torch.load('%s/NNTG_good_5.pt' % (save_dir)))
+                torch.load('%s/NNTG.pt' % (save_dir)))
 
     

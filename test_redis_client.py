@@ -17,6 +17,27 @@ import redis_utils as ru
 from logger import Logger
 # from main_learning import train_model
 
+latent_all = [[ 0.2295,  0.5950],
+        [ 0.1303,  0.0111],
+        [-0.0920,  0.3827],
+        [ 0.2068,  0.1836],
+        [ 0.2663, -0.0928],
+        [ 0.2584,  0.1057],
+        [ 0.2051, -0.3227],
+        [ 0.3041,  0.1780],
+        [ 0.5115,  0.1338],
+        [ 0.0178,  0.1417],
+        [-0.3598, -0.3446],
+        [-0.2903, -0.1586],
+        [-0.3960, -0.3700],
+        [-0.1368, -0.1423],
+        [-0.5574, -0.2970],
+        [-0.3518,  0.2172],
+        [-0.1867, -0.6132],
+        [-0.1863, -0.2268],
+        [ 0.5526, -0.3470],
+        [-0.2774,  0.1772]]
+
 def train_model(args, HL_replay_buffer, high_level_planning ):
     model_save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
     logger = Logger(model_save_dir, name = 'train')
@@ -34,7 +55,7 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
         'update_z_action': [0],
     }
     ru.set_variables(r, exp_variables)
-    for i in range(50,args.num_iters):
+    for i in range(17 ,args.num_iters):
         
         ru.wait_for_key(r,'not_finish_one_iter', change= False)
         print('Iteration: ' , i+1)
@@ -48,15 +69,20 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
             q = k % 5
             if q == 0:
                 target = np.clip(0.2 * np.random.randn(3),-0.25,0.25)
-            if  q==4:
+                latent_action = np.array(latent_all[i]) + 0.1 * np.random.randn(args.z_dim)
+                # latent_action = high_level_planning.sample_latent_action(target)
+            if  q==3 or q==4:
                 target = np.zeros(3)
+                latent_action = np.array([ 0.2068,  0.1836],) + 0.1 * np.random.randn(args.z_dim)
             
             # take current state and plan for next z_action and sent to daisy
             t_start = datetime.datetime.now()
-            if args.test:  
-                latent_action = high_level_planning.plan_latent_action(pre_com_state, target)
-            else:
-                latent_action = high_level_planning.sample_latent_action(target)
+            # if args.test:  
+            #     latent_action = high_level_planning.plan_latent_action(pre_com_state, target)
+            # else:
+            #     latent_action = high_level_planning.sample_latent_action(target)
+            
+            
 
             t_end = datetime.datetime.now()
             
@@ -89,15 +115,15 @@ def collect_data_client(args, r, high_level_planning, HL_replay_buffer):
     
 
 def main(args):
-    # r = redis.Redis(host='10.10.1.2', port=6379, db=0)
+    r = redis.Redis(host='10.10.1.2', port=6379, db=0)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model_obs_dim, model_output_dim = 4, 6
     # model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
     utils.make_dir(args.save_dir)
     HL_replay_buffer = utils.ReplayBuffer(model_obs_dim, args.z_dim, model_output_dim, device,                 
                 args.num_iters * args.num_latent_action_per_iteration)
-    HL_replay_buffer.load_buffer('./save_data/trial_3')
-    HL_replay_buffer.idx = 1960
+    HL_replay_buffer.load_buffer('./save_data/trial_4')
+    # HL_replay_buffer.idx = 1415
     high_level_planning = HLPM.high_level_planning(
             device = device,
             model_obs_dim = model_obs_dim,

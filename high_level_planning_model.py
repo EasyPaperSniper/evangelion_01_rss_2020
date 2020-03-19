@@ -12,27 +12,37 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import utils
+from baseline_code import SAC
+from NN_learned_action import learned_z
+from pytorchtools.pytorchtools import EarlyStopping
 
 NUM_LEGS = 6
 TRIPOD_LEG_PAIR_1 = [0, 3, 4]
 TRIPOD_LEG_PAIR_2 = [1, 2, 5]
-TRIPOD_LEG_PAIR_1 = [0, 1, 4, 5]
-TRIPOD_LEG_PAIR_2 = [ 2, 3]
+
 class forward_model(nn.Module):
     '''
     The forward model(mid-level policy) is a NN which is trained in a supervised manner
     '''
-    def __init__(self,model_obs_dim, z_dim, model_output_dim, model_hidden_num, device):
+    def __init__(self,model_obs_dim, z_dim, model_output_dim, model_hidden_num, model_layer_num,device):
         '''
         Initialize the structure and options for model
         '''
         super().__init__()
         self.device = device
+        modules = []
+        modules.append(nn.Linear(model_obs_dim + z_dim,512))
+        modules.append(nn.ReLU())
+        # # for _ in range(1,model_layer_num):
+        # modules.append(nn.Linear(16,16))
+        # modules.append(nn.ReLU())
+        modules.append(nn.Linear(512,512))
+        modules.append(nn.ReLU())
+        # modules.append(nn.Linear(256, 16))
+        # modules.append(nn.ReLU())
+        modules.append(nn.Linear(512, model_output_dim))
+        self.trunk = nn.Sequential(*modules)
 
-        self.trunk = nn.Sequential(
-            nn.Linear(model_obs_dim + z_dim, model_hidden_num ), nn.ReLU(),
-            nn.Linear(model_hidden_num, model_hidden_num), nn.ReLU(),
-            nn.Linear(model_hidden_num, model_output_dim))
 
     def forward(self,model_obs, latent_action):
         obs_action = torch.cat([model_obs, latent_action], dim=1)
@@ -119,25 +129,18 @@ class random_policy():
         self.control_frequency = control_frequency
 
 
-    def sample_latent_action(self, target_speed = None):
+    def sample_latent_action(self):
         if self.low_level_policy_type =='NN':
-            action = 0.8 * np.clip(0.4*np.random.randn(self.z_dim),-1,1)
+            # total_num = np.shape(learned_z)[0]
+            # index = np.random.randint(0, total_num, size =1)[0]
+            # action =  np.array(learned_z[index]) + np.clip(0.3*np.random.randn(self.z_dim),-1.0,1.0)
+            action = np.clip(1.5 * np.random.randn(self.z_dim),-8,8)
             return action
 
-        if not np.shape(target_speed):
-            action = np.clip(np.random.randn(self.z_dim), -1,1)
-            if self.low_level_policy_type =='IK':
-                for i in range(0, self.z_dim-1, 2):
-                    action[i] = action[i] * self.limits[0]
-                    action[i+1] = action[i+1] * self.limits[1]
-                action[-1] = action[-1] * 0.04 * math.pi
-        else:
-            T = float(self.stance_duration)/self.control_frequency # now the time for single step is hard coded
-            latent_action = np.clip(np.random.randn(self.z_dim), -1,1) * 0.02
-            latent_action[0:2] = target_speed[0:2] * T/2 + latent_action[0:2]
-            latent_action[2] = target_speed[2] * T + latent_action[2]
-            # latent_action = latent_action + target_speed
-            action = latent_action + np.clip(np.random.randn(self.z_dim) , -2, 2) * 0.00
+        if self.low_level_policy_type =='IK':
+            action = 0.1 * np.clip( np.random.randn(self.z_dim), -1.5,1.5)
+            action[2] = action[2] * 1.5
+                
         return action
     
     def plan_latent_action(self, state):
@@ -152,8 +155,8 @@ class random_policy():
             return self.sample_latent_action()
         
         latent_action = np.clip(np.random.randn(self.z_dim), -2,2) * 0.1 #+ target_speed * 0.05
-        latent_action[2] = -state['base_ori_euler'][2]
-        return latent_action
+        # latent_action[2] = -state['base_ori_euler'][2]
+        return self.sample_latent_action()
 
 class high_level_planning():
     def __init__(self,
@@ -162,6 +165,7 @@ class high_level_planning():
         z_dim,
         model_output_dim,
         model_hidden_num,
+        model_layer_num,
         batch_size = 64,
         model_lr = 1e-4,
         high_level_policy_type = 'random',
@@ -178,6 +182,7 @@ class high_level_planning():
         self.model_obs_dim = model_obs_dim
         self.z_dim = z_dim
         self.model_output_dim = model_output_dim
+        self.model_layer_num = model_layer_num
         self.model_hidden_num = model_hidden_num
         self.model_update_steps= model_update_steps
         self.device = device
@@ -203,17 +208,26 @@ class high_level_planning():
 
         self.batch_size = batch_size
 
-        self.forward_model =  forward_model(model_obs_dim, z_dim, model_output_dim, model_hidden_num, device)
+        self.forward_model =  forward_model(model_obs_dim, z_dim, model_output_dim, model_hidden_num,model_layer_num, device)
         self.model_lr = model_lr
-        self.model_optimizer = torch.optim.Adam(self.forward_model.parameters(),lr=self.model_lr)
+        self.model_optimizer = torch.optim.Adam(self.forward_model.parameters(),lr=self.model_lr, weight_decay=2e-4)
 
         if high_level_policy_type == 'random':
-            self.p = mp.Pool(mp.cpu_count())
             self.policy = random_policy(z_dim, self.limits, low_level_policy_type, stance_duration  = num_timestep_per_footstep, control_frequency = control_frequency)
             self.update_sample_policy = False
         elif high_level_policy_type == 'raibert':
             self.policy = raibert_footstep_policy(stance_duration  = num_timestep_per_footstep, control_frequency = control_frequency)
             self.update_sample_policy = False
+        elif high_level_policy_type == 'SAC':
+            # defining SAC here
+            self.update_sample_policy = update_sample_policy
+            self.policy = SAC(device = self.device,
+                            obs_dim = self.model_obs_dim,
+                            action_dim = self.z_dim,
+                            hidden_dim = self.model_hidden_num,   
+                            actor_lr=update_sample_policy_lr,
+                            critic_lr=update_sample_policy_lr,)
+
         else:
             print('Not implement yet!!')
             # self.policy = curiosity_policy()
@@ -223,28 +237,47 @@ class high_level_planning():
         
 
     def update_model(self, HL_replay_buffer, logger):
-        for _ in range(self.model_update_steps):
+        early_stopper = EarlyStopping(patience=7)
+        split = 10.0
+        state_norm = utils.normalization(HL_replay_buffer.obses, self.all_mean_var[0], self.all_mean_var[1])
+        action_norm = utils.normalization(HL_replay_buffer.actions, self.all_mean_var[2], self.all_mean_var[3])
+        delta_state_norm = utils.normalization(HL_replay_buffer.next_obses, self.all_mean_var[4], self.all_mean_var[5])
+        train_capacity = int(HL_replay_buffer.capacity * (split-1)/split)
+        test_idxs = np.arange(-int(HL_replay_buffer.capacity / split) ,0)
+
+        state_test = torch.as_tensor(state_norm[test_idxs], device=self.device).float()
+        action_test = torch.as_tensor(action_norm[test_idxs], device=self.device).float()
+        delta_state_test = torch.as_tensor(delta_state_norm[test_idxs], device=self.device).float()
+
+        for i in range(self.model_update_steps):
             self.update_step += 1
+            idxs = np.random.randint( 0, train_capacity , size=self.batch_size)
+            # idxs = np.random.randint(0, 1100, size=self.batch_size)
 
-            # idxs = np.random.randint(
-            #     0, HL_replay_buffer.capacity , size=self.batch_size)
-            idxs = np.random.randint(0, 1100, size=self.batch_size)
-
-
-            state = torch.as_tensor(utils.normalization(HL_replay_buffer.obses[idxs], self.all_mean_var[0], self.all_mean_var[1]), device=self.device).float()
-            action = torch.as_tensor(utils.normalization(HL_replay_buffer.actions[idxs], self.all_mean_var[2], self.all_mean_var[3]), device=self.device).float()
-            delta_state = torch.as_tensor(
-                utils.normalization(HL_replay_buffer.next_obses[idxs], self.all_mean_var[4], self.all_mean_var[5]), device=self.device).float()
-
+            state = torch.as_tensor(state_norm[idxs], device=self.device).float()
+            action = torch.as_tensor(action_norm[idxs], device=self.device).float()
+            delta_state = torch.as_tensor(delta_state_norm[idxs], device=self.device).float()
 
             pred_delta_state = self.forward_model(state,action)
             model_loss = F.mse_loss(pred_delta_state, delta_state)
             self.model_optimizer.zero_grad()
             model_loss.backward()
             self.model_optimizer.step()
+
             logger.log('train/model_loss', model_loss)
             logger.dump(self.update_step)
 
+            if (i+1) %100==0:
+                pred_delta_state = self.forward_model(state_test,action_test)
+                model_loss = F.mse_loss(pred_delta_state, delta_state_test)
+                logger.log('train/val_loss', model_loss)
+                logger.dump(self.update_step)
+                early_stopper(model_loss)
+
+            if early_stopper.early_stop:
+                break
+
+        self.save_data('.')
 
     def update_model_norm(self, all_mean_var):
         '''
@@ -259,57 +292,45 @@ class high_level_planning():
         return utils.inverse_normalization(predict_norm, mean = self.all_mean_var[4], std = self.all_mean_var[5])
 
 
-    def sample_latent_action(self,target_speed=None):
-        latent_action = self.policy.sample_latent_action(target_speed)
+    def sample_latent_action(self,state=None, target=None, com_utils=None):
+        if self.high_level_policy_type =='SAC':
+            obs = com_utils.HL_obs(state, target)
+            return self.policy.sample_latent_action(obs)
+        latent_action = self.policy.sample_latent_action()
         return latent_action
 
-    def update_policy(self):
+    def update_policy(self, replay_buffer):
         if self.update_sample_policy:
-            self.policy.update_policy()
+            for _ in range(self.update_sample_policy):
+                self.policy.update_policy(replay_buffer)
+        self.save_data('.')
 
-    def plan_latent_action_old(self,state, target_speed = None, sample_num = 1, horizon = 1):
+
+    def plan_latent_action(self, state, target, com_utils=None, sample_num = 1500, horizon = 2):
         if self.high_level_policy_type =='raibert':
-            self.policy.target_speed = target_speed
-            return self.policy.plan_latent_action(state,target_speed )
+            self.policy.target_speed = target
+            return self.policy.plan_latent_action(state,target)
+
+        if self.high_level_policy_type =='SAC':
+            obs = com_utils.HL_obs(state, target)
+            return self.policy.plan_latent_action(obs)
         
-        if self.high_level_policy_type == 'random':
-            # sample bunch of actions and plan for single step
-            latent_action_buffer = np.empty([sample_num, horizon, self.z_dim])
-
-            for sample_index in range(sample_num):
-                for horizon_index in range(horizon):
-                    latent_action_buffer[sample_index][horizon_index] = self.policy.plan_latent_action(target_speed)
-
-            # run model to calculate reward
-            cost = [self.p.apply(utils.run_mpc_without_norm,args=(state , self.forward_model, target_speed, latent_action_sample, self.all_mean_var)) 
-                                        for latent_action_sample in latent_action_buffer]
-
-            # return best reward index and select action
-            sqe_index = cost.index(min(cost))
-            latent_action = latent_action_buffer[sqe_index][0]
-            return latent_action
-
-
-    def plan_latent_action(self,state, target_speed = None, sample_num = 1500, horizon = 2):
-        if self.high_level_policy_type =='raibert':
-            self.policy.target_speed = target_speed
-            return self.policy.plan_latent_action(state,target_speed )
-        
-        if self.high_level_policy_type == 'random':
+        if self.high_level_policy_type in ['random']:
             # sample bunch of actions and plan for single step
             latent_action_buffer = np.empty([horizon, sample_num, self.z_dim])
             HL_obs_buffer = np.empty([sample_num, self.model_obs_dim])
-            position_buffer = np.empty([sample_num, 2])
+            position_buffer = np.empty([sample_num, 5])
             cost = np.zeros(sample_num)
-            HL_obs = utils.HL_obs(state)
+            HL_obs = com_utils.HL_obs(state)
 
             for sample_index in range(sample_num):
                 HL_obs_buffer[sample_index] = HL_obs
-                position_buffer[sample_index]= np.array([state['base_pos_x'][0], state['base_pos_y'][0]])
+                position_buffer[sample_index]= np.array([state['base_ori_euler'][2],state['base_pos_x'][0], state['base_pos_y'][0], 
+                                                            state['base_velocity'][0],state['base_velocity'][1]])
                 for horizon_index in range(horizon):
                     latent_action_buffer[horizon_index][sample_index] = self.policy.plan_latent_action(state)
             
-            cost = utils.run_mpc_calc_cost(HL_obs_buffer, self.forward_model, target_speed, latent_action_buffer, position_buffer, cost, self.all_mean_var).tolist()
+            cost = com_utils.run_mpc_calc_cost(HL_obs_buffer, self.forward_model, target, latent_action_buffer, position_buffer, cost, self.all_mean_var).tolist()
 
             # return best reward index and select action
             sqe_index = cost.index(min(cost))
@@ -318,10 +339,14 @@ class high_level_planning():
     
     
     def save_data(self,save_dir):
+        if self.update_sample_policy:
+            self.policy.save(save_dir)
         torch.save(self.forward_model.state_dict(),
                    '%s/model.pt' % (save_dir) )
 
     def load_data(self, save_dir):
+        if self.update_sample_policy:
+            self.policy.load(save_dir)
         self.forward_model.load_state_dict(
             torch.load('%s/model.pt' % (save_dir)))
 

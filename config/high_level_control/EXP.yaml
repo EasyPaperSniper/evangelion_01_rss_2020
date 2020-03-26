@@ -1,0 +1,9 @@
+high_level_policy_type: raibert
+z_dim: 3
+num_timestep_per_footstep: 50
+model_hidden_num: 16
+batch_size: 64
+model_lr: 1e-3
+model_update_steps: 1500
+update_sample_policy: 0 
+update_sample_policy_lr: 1e-3

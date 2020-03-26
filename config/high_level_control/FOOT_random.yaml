@@ -1,0 +1,11 @@
+high_level_policy_type: random
+z_dim: 3
+num_timestep_per_footstep: 50
+model_hidden_num: 512
+model_layer_num: 3
+batch_size: 512
+model_lr: 1e-3
+model_update_steps: 10000
+update_sample_policy: 0 
+update_sample_policy_lr: 1e-3
+

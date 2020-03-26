@@ -1,0 +1,3 @@
+test: 0
+num_iters: 1000
+num_latent_action_per_iteration: 10

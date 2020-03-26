@@ -1,0 +1,5 @@
+a_dim: 18
+policy_size: 512
+low_level_policy_type: 'IK'
+update_low_level_policy: 0
+low_level_buffer_size: 10000

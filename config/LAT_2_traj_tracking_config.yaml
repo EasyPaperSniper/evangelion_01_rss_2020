@@ -1,0 +1,12 @@
+seed: 2
+control_mode: 'position'
+
+mpc_sample_num: 3000
+mpc_horizon: 3
+
+defaults:
+  - env: sim_not_render
+  - high_level_control: LAT_random_2
+  - low_level_control: LAT_2
+  - rollout: traj_tracking
+  - hydra/run: customized

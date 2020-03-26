@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument('--control_frequency',default=60,type=int)
     # parser.add_argument('--control_frequency',default=100,type=int) # for hardware
     parser.add_argument('--render',default=0,type=int)
-    parser.add_argument('--seed',default=5,type=int)
+    
     parser.add_argument('--control_mode',default='position',type=str)
     parser.add_argument('--num_iters',default= 200 ,type=int)
     parser.add_argument('--num_latent_action_per_iteration',default=20,type=int)
@@ -36,7 +36,6 @@ def parse_args():
     parser.add_argument('--update_low_level_policy_lr',default=1e-3,type=float)
     parser.add_argument('--start_training_sample_num',default=50,type=int)
     parser.add_argument('--low_level_buffer_size',default=10000,type=int)
-    parser.add_argument('--save',default=1,type=int)
     parser.add_argument('--save_dir',default='./save_data',type=str)
 
 

@@ -1,0 +1,12 @@
+seed: 100
+control_mode: 'position'
+
+mpc_sample_num: 1500
+mpc_horizon: 3
+
+defaults:
+  - env: sim_not_render
+  - high_level_control: SAC
+  - low_level_control: IK
+  - rollout: multi_tgt
+  - hydra/run: customized

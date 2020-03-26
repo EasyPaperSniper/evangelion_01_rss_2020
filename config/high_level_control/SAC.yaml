@@ -1,0 +1,9 @@
+high_level_policy_type: SAC
+z_dim: 3
+num_timestep_per_footstep: 50
+model_hidden_num: 64
+batch_size: 64
+model_lr: 1e-3
+model_update_steps: 10
+update_sample_policy: 10
+update_sample_policy_lr: 1e-3

@@ -1,0 +1,53 @@
+hydra_logging:
+  disable_existing_loggers: false
+  formatters:
+    simple:
+      format: '[%(asctime)s] - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: simple
+      stream: ext://sys.stdout
+  loggers:
+    logging_example:
+      level: DEBUG
+  root:
+    handlers:
+    - console
+    level: INFO
+  version: 1
+job:
+  name: main_learning
+  override_dirname: ''
+job_logging:
+  disable_existing_loggers: false
+  formatters:
+    simple:
+      format: '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: simple
+      stream: ext://sys.stdout
+    file:
+      class: logging.FileHandler
+      filename: ${hydra.job.name}.log
+      formatter: simple
+  root:
+    handlers:
+    - console
+    - file
+    level: INFO
+  version: 1
+launcher:
+  class: hydra._internal.core_plugins.basic_launcher.BasicLauncher
+overrides:
+  hydra: []
+  task: []
+run:
+  dir: ./save_data/trial_${seed}
+sweep:
+  dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  subdir: ${hydra.job.num}_${hydra.job.id}
+sweeper:
+  class: hydra._internal.core_plugins.basic_sweeper.BasicSweeper

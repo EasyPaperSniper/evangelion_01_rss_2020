@@ -1,0 +1,31 @@
+# OS generated files #
+######################
+.DS_Store
+*.pyc
+
+# Plots files #
+#####################
+*.png
+*.pdf
+
+# Video files #
+#######################
+*.MP4
+*.MOV
+
+# Log files #
+#######################
+*.log
+
+# data file #
+######################
+*.npy
+*.npz
+
+# Keynote and PPT #
+######################
+*.key
+
+# Trained model #
+######################
+*.pt

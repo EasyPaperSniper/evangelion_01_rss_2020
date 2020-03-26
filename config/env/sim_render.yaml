@@ -1,0 +1,3 @@
+sim: True
+control_frequency: 60
+render: True

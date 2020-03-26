@@ -36,7 +36,7 @@ class forward_model(nn.Module):
         # # for _ in range(1,model_layer_num):
         # modules.append(nn.Linear(16,16))
         # modules.append(nn.ReLU())
-        modules.append(nn.Linear(512,512))
+        modules.append(nn.Linear(512, 512))
         modules.append(nn.ReLU())
         # modules.append(nn.Linear(256, 16))
         # modules.append(nn.ReLU())
@@ -134,7 +134,7 @@ class random_policy():
             # total_num = np.shape(learned_z)[0]
             # index = np.random.randint(0, total_num, size =1)[0]
             # action =  np.array(learned_z[index]) + np.clip(0.3*np.random.randn(self.z_dim),-1.0,1.0)
-            action = np.clip(1.5 * np.random.randn(self.z_dim),-8,8)
+            action = np.clip(1.3 * np.random.randn(self.z_dim),-3,3) 
             return action
 
         if self.low_level_policy_type =='IK':

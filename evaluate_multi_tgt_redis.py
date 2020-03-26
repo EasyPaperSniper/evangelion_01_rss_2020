@@ -46,7 +46,7 @@ def evaluation(args, r, high_level_planning):
         input('Press any key after initialized robot')
         ru.wait_for_key(r,'finish_one_step')
         state, exp_variables = ru.get_state(r)
-        target = target_position_test[iter]/2.0
+        target = target_position_test[iter]
         target[0]+= target[0]+ state['base_pos_x'][0]
         target[1]+= target[1]+ state['base_pos_y'][0]
         target[3] = 1

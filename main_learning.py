@@ -1,5 +1,6 @@
 import os
 import json
+import math
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 import numpy as np
@@ -17,15 +18,19 @@ from logger import Logger
 
 # rollout to collect data
 def collect_data(cfg,env,high_level_planning,low_level_TG, HL_replay_buffer, com_utils):
+    action_save = []
+    save = 0
     for iter in range(cfg.num_iters):
         state = motion_library.exp_standing(env)
         low_level_TG.reset(state)
+        j =0 
         
-        for j in range(cfg.num_latent_action_per_iteration):
+        while j < cfg.num_latent_action_per_iteration:
             # generate foot footstep position. If test, the footstep comes from optimization process
             pre_com_state = state
             if j%2==0:
                 latent_action = high_level_planning.sample_latent_action()
+            
 
             low_level_TG.update_latent_action(state,latent_action)
         
@@ -35,11 +40,17 @@ def collect_data(cfg,env,high_level_planning,low_level_TG, HL_replay_buffer, com
 
             post_com_state = state
             high_level_obs, high_level_delta_obs = com_utils.HL_obs(pre_com_state), com_utils.HL_delta_obs(pre_com_state, post_com_state)
-            HL_replay_buffer.add(high_level_obs, latent_action, 0, high_level_delta_obs, 1)
+            if abs(high_level_delta_obs[3]+ high_level_obs[0])>0.5 or   abs(high_level_delta_obs[4]+ high_level_obs[1])>0.5:
+                save = 1  
+                action_save.append(latent_action)
+            else:
+                HL_replay_buffer.add(high_level_obs, latent_action, 0, high_level_delta_obs, 1)
+                j+=1
+                
 
-            if utils.check_robot_dead(state):
-                break
-    
+        if save:
+            np.save('./trash_action.npy',np.array(action_save))
+
     HL_replay_buffer.save_buffer()
 
 
@@ -56,7 +67,7 @@ def main(cfg):
     # define env & high level planning part & low level trajectory generator & replay buffer for HLP
     # initialize logger
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    env = daisy_API(sim=cfg.sim, render=cfg.render, logger = False)
+    env = daisy_API(sim=cfg.sim, render=False, logger = False)
     env.set_control_mode(cfg.control_mode)
     state = env.reset()
     com_utils = utils.CoM_frame_MPC()

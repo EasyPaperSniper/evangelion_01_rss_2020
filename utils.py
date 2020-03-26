@@ -288,8 +288,8 @@ def calc_next_input(predict_delta_state, position_buffer):
 
 def calc_cost(cost, predict_delta_state, world_buffer, target,latent_action_sample_all, last_velocity):
     for i in range(np.shape(cost)[0]):
-        # cost[i] = 2 * np.linalg.norm(target[0:2] - world_buffer[i][1:3]) + 1*np.linalg.norm(target[2]- world_buffer[i][0]) # for target reaching
-        cost[i] += 2*np.linalg.norm(target[0:2] - world_buffer[i][3:5]) + 1*np.linalg.norm(target[2]- world_buffer[i][0]) # for velocity tracking
+        cost[i] = 2 * np.linalg.norm(target[0:2] - world_buffer[i][1:3]) + 1*np.linalg.norm(target[2]- world_buffer[i][0]) # for target reaching
+        # cost[i] += 2*np.linalg.norm(target[0:2] - world_buffer[i][3:5]) + 1*np.linalg.norm(target[2]- world_buffer[i][0]) # for velocity tracking
     return cost
 
 def run_mpc_calc_cost(HL_obs_buffer, model, target, latent_action_sample, position_buffer, cost, mean_var):

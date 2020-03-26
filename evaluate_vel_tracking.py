@@ -5,6 +5,7 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 import numpy as np
 import torch
+import hydra
 
 from daisy_API import daisy_API
 import daisy_hardware.motion_library as motion_library
@@ -14,138 +15,113 @@ from args_all import parse_args
 import utils
 from logger import Logger
 
-
-def evaluate_model(args):
+@hydra.main(config_path='config/LAT_2_vel_tracking_config.yaml',strict=False)
+def evaluate_model(cfg):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    env = daisy_API(sim=args.sim, render=args.render, logger = False)
-    env.set_control_mode(args.control_mode)
+    env = daisy_API(sim=cfg.sim, render=cfg.render, logger = False)
+    env.set_control_mode(cfg.control_mode)
     state = env.reset()
-    utils.make_dir(args.save_dir)
-    save_dir = utils.make_dir(os.path.join(args.save_dir + '/trial_%s' % str(args.seed))) if args.save else None
-    total_timestep, total_latent_action = 0, 0 
-
-    if args.sim:
-        if args.low_level_policy_type =='NN':
-            init_state = motion_library.exp_standing(env, shoulder = 0.3, elbow = 1.3)
-        else:
-            init_state = motion_library.exp_standing(env)
-    model_obs_dim, model_output_dim = np.size(utils.HL_obs(state)), np.size(utils.HL_delta_obs(state, state))
-
+    com_utils = utils.CoM_frame_MPC()
     
+    if cfg.sim:
+        init_state = motion_library.exp_standing(env)
+        
+    model_obs_dim, model_output_dim = np.size(com_utils.HL_obs(state)), np.size(com_utils.HL_delta_obs(state, state))
+
     high_level_planning = HLPM.high_level_planning(
         device = device,
         model_obs_dim = model_obs_dim,
-        z_dim = args.z_dim,
+        z_dim = cfg.z_dim,
         model_output_dim = model_output_dim,
-        model_hidden_num = args.model_hidden_num,
-        batch_size = args.batch_size,
-        model_lr = args.model_lr,
-        high_level_policy_type = args.high_level_policy_type,
-        update_sample_policy = args.update_sample_policy,
-        update_sample_policy_lr = args.update_sample_policy_lr,
-        low_level_policy_type = args.low_level_policy_type,
-        num_timestep_per_footstep = args.num_timestep_per_footstep,
-        model_update_steps = args.model_update_steps,
-        control_frequency= args.control_frequency
+        model_hidden_num = cfg.model_hidden_num,
+        model_layer_num = cfg.model_layer_num,
+        batch_size = cfg.batch_size,
+        model_lr = cfg.model_lr,
+        high_level_policy_type = cfg.high_level_policy_type,
+        update_sample_policy = cfg.update_sample_policy,
+        update_sample_policy_lr = cfg.update_sample_policy_lr,
+        low_level_policy_type = cfg.low_level_policy_type,
+        num_timestep_per_footstep = cfg.num_timestep_per_footstep,
+        model_update_steps = cfg.model_update_steps,
+        control_frequency=cfg.control_frequency
     )
-    high_level_planning.load_data(save_dir)
-    high_level_planning.load_mean_var(save_dir+'/buffer_data')
+    high_level_planning.load_data('.')
+    high_level_planning.load_mean_var('.'+'/buffer_data')
     
     low_level_TG = LLTG.low_level_TG(
         device = device,
-        z_dim = args.z_dim,
-        a_dim = args.a_dim,
-        num_timestep_per_footstep = args.num_timestep_per_footstep,
-        batch_size = args.batch_size,
-        low_level_policy_type = args.low_level_policy_type,
-        update_low_level_policy = args.update_low_level_policy,
-        update_low_level_policy_lr = args.update_low_level_policy_lr,
+        z_dim = cfg.z_dim,
+        a_dim = cfg.a_dim,
+        num_timestep_per_footstep = cfg.num_timestep_per_footstep,
+        batch_size = cfg.batch_size,
+        low_level_policy_type = cfg.low_level_policy_type, 
+        update_low_level_policy = cfg.update_low_level_policy,
+        update_low_level_policy_lr = cfg.update_low_level_policy_lr,
         init_state = init_state,
     )
-    if args.low_level_policy_type =='NN':
-        low_level_TG.load_model('./save_data/trial_2')
 
-    prediction_evaluation = np.empty((2* model_output_dim,args.num_latent_action_per_iteration ))
-    velocity_tracking = np.empty((args.num_iters,6,args.num_latent_action_per_iteration))
+    if cfg.low_level_policy_type =='NN':
+        low_level_TG.load_model('.')
+
+    prediction_evaluation = np.empty((2* model_output_dim,cfg.num_latent_action_per_iteration ))
+    velocity_tracking = np.empty((cfg.num_iters,6,cfg.num_latent_action_per_iteration))
 
     
-    target_velocity_test = [np.array([0.0, 0.15, 0.0,1]),
-                        np.array([0.0, 0.15, 0.0,1]),
-                        np.array([-0.0, 0.15, 0.0,1]),
-                        np.array([-0.15, 0.0,0.0,1]),
-                        np.array([-0.15, 0.0, 0.0,1]),
-                        np.array([-0.15, 0.0,0.0,1]),
-                        np.array([0.0, -0.15,0.0,1]),                   
-                        np.array([0.0, -0.15,0.0,1]),
-                        np.array([0.00, -0.15, 0.0,1]),
-                        np.array([0.0, -0.15, 0.0,1]),
-                        np.array([0.15, -0.0, 0.0,1]),
-                        np.array([0.15, -0.0, 0.0,1]),
-                        np.array([0.15, -0.0, 0.0,1]),
-                        np.array([0.15, -0.0, 0.0,1]),
-                        np.array([0.15, -0.0,0.0,1]),]
-
-    total_cost = []
+    target_velocity_test = [ 
+                        np.array([0.0, 0.2, 0.0,1]),
+                        np.array([0.0, 0.2, 0.0,1]),
+                        np.array([-0.0, 0.2, 0.0,1]),
+                        np.array([-0.2, 0.0,0.0,1]),
+                        np.array([-0.2, 0.0, 0.0,1]),
+                        np.array([-0.2, 0.0,0.0,1]),
+                        np.array([0.0, -0.2,0.0,1]),                   
+                        np.array([0.0, -0.2,0.0,1]),
+                        np.array([0.0, -0.2, 0.0,1]),
+                        np.array([0.0, -0.2, 0.0,1]),
+                        np.array([0.2, -0.0, 0.0,1]),
+                        np.array([0.2, -0.0, 0.0,1]),
+                        np.array([0.2, -0.0, 0.0,1]),
+                        np.array([0.2, -0.0, 0.0,1]),
+                        np.array([0.2, -0.0,0.0,1]),
+                      ]
     
-    velocity_tracking = np.empty((args.num_iters, 6,args.num_latent_action_per_iteration))
-    for iter in range(args.num_iters):
-        prediction_evaluation = np.empty((2* model_output_dim,args.num_latent_action_per_iteration ))
+    velocity_tracking = np.empty((cfg.num_iters, 6,cfg.num_latent_action_per_iteration))
+    for iter in range(cfg.num_iters):
+        prediction_evaluation = np.empty((2* model_output_dim,cfg.num_latent_action_per_iteration ))
         
         total_cost = 0
-        # reset robot to stand 
-        
-        if args.low_level_policy_type =='NN':
-            init_state = motion_library.exp_standing(env, shoulder = 0.3, elbow = 1.3)
-        else:
-            init_state = motion_library.exp_standing(env)
+        init_state = motion_library.exp_standing(env)
 
-
-        for j in range(args.num_latent_action_per_iteration):
+        for j in range(cfg.num_latent_action_per_iteration):
             if not j%5:
-                target = target_velocity_test[int((j+1)/5)]/1.5*2
-
+                target = target_velocity_test[int((j+1)/5)]
 
             pre_com_state = state
-            latent_action = high_level_planning.plan_latent_action(state, target)
+            latent_action = high_level_planning.plan_latent_action(state, target, com_utils, cfg.mpc_sample_num, cfg.mpc_horizon)
             low_level_TG.update_latent_action(state,latent_action)
             
-            for step in range(1, args.num_timestep_per_footstep+1):
+            for step in range(1, cfg.num_timestep_per_footstep+1):
                 action = low_level_TG.get_action(state, step)
-                state, total_timestep = env.step(action), total_timestep + 1
+                state = env.step(action)
 
             post_com_state = state
             
-
             # Check if robot still alive
-            if utils.check_data_useful(state):
-                high_level_obs , high_level_delta_obs = utils.HL_obs(pre_com_state), utils.HL_delta_obs(pre_com_state, post_com_state)
-                predict_state = high_level_planning.model_predict(high_level_obs, latent_action)
+            high_level_obs , high_level_delta_obs = com_utils.HL_obs(pre_com_state), com_utils.HL_delta_obs(pre_com_state, post_com_state)
+            predict_delta_state = high_level_planning.model_predict(high_level_obs, latent_action)
+            predict_state_world = com_utils.predict2world(pre_com_state, predict_delta_state)
 
             # collect data
-
             velocity_tracking[iter][0][j] = target[0]
             velocity_tracking[iter][1][j] = target[1]
-            velocity_tracking[iter][2][j] = predict_state[4]
-            velocity_tracking[iter][3][j] = predict_state[5]
-            velocity_tracking[iter][4][j] = high_level_delta_obs[4]
-            velocity_tracking[iter][5][j] = high_level_delta_obs[5]
-            for q in range(model_output_dim):
-                prediction_evaluation[q][j] = high_level_delta_obs[q]
-                prediction_evaluation[q+model_output_dim][j] = predict_state[q]
+            velocity_tracking[iter][2][j] = predict_state_world[3]
+            velocity_tracking[iter][3][j] = predict_state_world[4]
+            velocity_tracking[iter][4][j] = post_com_state['base_velocity'][0]
+            velocity_tracking[iter][5][j] = post_com_state['base_velocity'][1]
 
-            total_latent_action += 1
-
-            if utils.check_robot_dead(state):
-                break
-            
       
-    np.save(save_dir + '/' + args.high_level_policy_type + '_velocity_tracking_fin.npy', velocity_tracking) 
-
+    np.save('./' + cfg.high_level_policy_type + '_velocity_tracking_fin.npy', velocity_tracking) 
     return 
 
 if __name__ == "__main__":
-    args = parse_args()
-    if args.test:
-        evaluate_model(args)
-    else:
-        print(" This is evaluation file, please run training file")
+    evaluate_model()

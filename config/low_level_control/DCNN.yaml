@@ -1,0 +1,5 @@
+a_dim: 3
+policy_size: 64
+low_level_policy_type: 'DCNN'
+update_low_level_policy: 1
+low_level_buffer_size: 10000

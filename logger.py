@@ -12,7 +12,8 @@ from termcolor import colored
 FORMAT_CONFIG = {
     'step_0': {
         'train': [('iterations', 'iter', 'int'),
-                  ('model_loss', 'MLOSS', 'float'),],
+                  ('model_loss', 'MLOSS', 'float'),
+                  ('val_loss', 'VLOSS', 'float'),],
         'eval': [('step', 'S', 'int'),
                  ('x_pos', 'x', 'float'),
                  ('y_pos', 'y', 'float'),
@@ -100,10 +101,10 @@ class MetersGroup(object):
 
 class Logger(object):
     def __init__(self, log_dir, name, config='step_0'):
-        self.name = name
+        self.name = name[0:5]
         self._log_dir = log_dir
         self.mg = MetersGroup(
-            os.path.join(log_dir, self.name + '.log'),
+            os.path.join(log_dir, name + '.log'),
             formating=FORMAT_CONFIG[config][self.name])
 
     def log(self, key, value, n=1):

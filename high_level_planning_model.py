@@ -14,7 +14,7 @@ import torch.nn.functional as F
 import utils
 from baseline_code import SAC
 from NN_learned_action import learned_z
-from pytorchtools.pytorchtools import EarlyStopping
+from pytorchtools import EarlyStopping
 
 NUM_LEGS = 6
 TRIPOD_LEG_PAIR_1 = [0, 3, 4]
